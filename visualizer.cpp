@@ -701,6 +701,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
             break;
         case MULTI_BAND_CIRCLE_WAVEFORM:
+            currentVisualizerType = TERRAIN_VISUALIZER_3D;
+            break;
+        case TERRAIN_VISUALIZER_3D:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }

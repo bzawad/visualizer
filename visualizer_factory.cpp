@@ -5,6 +5,7 @@
 #include "ascii_bar_equalizer.h"
 #include "spectrogram.h"
 #include "multi_band_circle_waveform.h"
+#include "terrain_visualizer_3d.h"
 #include <algorithm>
 #include <cctype>
 
@@ -24,6 +25,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<Spectrogram>();
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return std::make_shared<MultiBandCircleWaveform>();
+    case TERRAIN_VISUALIZER_3D:
+        return std::make_shared<TerrainVisualizer3D>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -61,6 +64,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(MULTI_BAND_CIRCLE_WAVEFORM);
     }
+    else if (lowerName == "terrain" || lowerName == "3d" || lowerName == "terrain3d" || lowerName == "3d_terrain")
+    {
+        return createVisualizer(TERRAIN_VISUALIZER_3D);
+    }
     else
     {
         // Default to bar equalizer
@@ -84,6 +91,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Spectrogram";
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return "Multi-Band Circle Waveform";
+    case TERRAIN_VISUALIZER_3D:
+        return "3D Terrain Visualizer";
     default:
         return "Unknown";
     }
