@@ -66,12 +66,13 @@ std::vector<uint8_t> frameBuffer;
 
 // Forward declarations
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 bool loadWavFile(const std::string& filename);
 void renderFrameAtTime(float timeSeconds);
 bool initializeVideoEncoder();
 void finalizeVideoEncoder();
 void encodeVideoFrame(int frameIndex);
-void encodeAudioForFrame(int frameIndex); // Remove unused parameter
+void encodeAudioForFrame(int frameIndex);
 
 // Audio callback function for PortAudio (for live playback)
 static int paCallback(const void* inputBuffer, void* outputBuffer,
@@ -114,7 +115,7 @@ static int paCallback(const void* inputBuffer, void* outputBuffer,
 
 // OpenGL rendering function for bar visualization
 void renderFFT(float timeSeconds) {
-    glClear(GL_COLOR_BUFFER_BIT);
+    // Clear is now handled by renderFrameAtTime
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
     
     // Calculate the sample index for the current time
@@ -168,7 +169,7 @@ void renderFFT(float timeSeconds) {
 
 // OpenGL rendering function for waveform visualization
 void renderWaveform(float timeSeconds) {
-    glClear(GL_COLOR_BUFFER_BIT);
+    // Clear is now handled by renderFrameAtTime
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
     
     // Calculate the sample index for the current time
@@ -253,6 +254,14 @@ void renderLiveVisualization() {
 
 // Render a frame at the specified time
 void renderFrameAtTime(float timeSeconds) {
+    // Ensure rendering state is consistent for both recording and live modes
+    glClear(GL_COLOR_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    
     if (currentVisualizer == BAR_EQUALIZER) {
         renderFFT(timeSeconds);
     } else {
@@ -496,6 +505,14 @@ void finalizeVideoEncoder() {
 void encodeVideoFrame(int frameIndex) {
     if (!recordVideo || !formatContext) return;
     
+    // Ensure viewport and projection are set correctly before capturing frame
+    glViewport(0, 0, WIDTH, HEIGHT);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    
     // Read pixels from OpenGL framebuffer
     glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, frameBuffer.data());
     
@@ -658,6 +675,23 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
 }
 
+// Window resize callback to handle viewport changes
+void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    (void)window; // Unused parameter
+    
+    // Update viewport to match new window size
+    glViewport(0, 0, width, height);
+    
+    // Reset the projection matrix
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    
+    // Switch back to modelview matrix
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+
 // Main function
 int main(int argc, char** argv) {
     std::string wavFile;
@@ -705,6 +739,11 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // Set window hints for a better default configuration
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+
     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Music Visualizer", NULL, NULL);
     if (!window) {
         std::cerr << "Failed to create window\n";
@@ -714,17 +753,43 @@ int main(int argc, char** argv) {
 
     glfwMakeContextCurrent(window);
     glfwSetKeyCallback(window, keyCallback);
-    glewInit();
+    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback); // Set resize callback
+    
+    // Initialize GLEW
+    if (glewInit() != GLEW_OK) {
+        std::cerr << "Failed to initialize GLEW\n";
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return -1;
+    }
 
     // Set up FFTW
     plan = fftw_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+    
+    // Initialize FFT input buffer with zeros
+    for (int i = 0; i < N; i++) {
+        in[i] = 0.0;
+    }
+    
+    // Execute FFT once to ensure it's properly initialized
+    fftw_execute(plan);
 
-    // Set OpenGL viewport
-    glViewport(0, 0, WIDTH, HEIGHT);
+    // Set OpenGL viewport explicitly
+    int fbWidth, fbHeight;
+    glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+    glViewport(0, 0, fbWidth, fbHeight);
+    
+    // Set up projection matrix
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glOrtho(-1, 1, -1, 1, -1, 1);
+    
+    // Switch to modelview matrix and initialize it
     glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    
+    // Set clear color
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     
     // Initialize video encoder if recording
     if (recordVideo) {
@@ -811,7 +876,15 @@ int main(int argc, char** argv) {
             return -1;
         }
         
-        // Start audio stream
+        // Reset playback flag and position
+        playbackFinished = false;
+        currentPosition.store(0);
+        
+        // Initialize visualization by rendering the first frame before starting audio
+        renderLiveVisualization();
+        glfwSwapBuffers(window);
+        
+        // Start audio stream after visualization is initialized
         err = Pa_StartStream(stream);
         if (err != paNoError) {
             std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
@@ -822,10 +895,6 @@ int main(int argc, char** argv) {
             glfwTerminate();
             return -1;
         }
-        
-        // Reset playback flag and position
-        playbackFinished = false;
-        currentPosition.store(0);
         
         // Live visualization loop
         while (!glfwWindowShouldClose(window) && !playbackFinished) {
