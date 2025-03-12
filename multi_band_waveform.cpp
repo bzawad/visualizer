@@ -104,6 +104,9 @@ void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOf
 {
     glColor3fv(color);
 
+    // Set line thickness to 5 pixels
+    glLineWidth(5.0f);
+
     // Draw the waveform
     glBegin(GL_LINE_STRIP);
 
@@ -134,6 +137,9 @@ void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOf
         glVertex2f(x, y);
     }
     glEnd();
+
+    // Reset line width to default (1.0)
+    glLineWidth(1.0f);
 }
 
 std::vector<float> MultiBandWaveform::filterBand(fftw_complex *fftOutput, int startBin, int endBin)
