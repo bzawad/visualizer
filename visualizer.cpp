@@ -19,6 +19,7 @@ extern "C" {
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
+#include <libavutil/mathematics.h>
 }
 
 // Window dimensions
@@ -51,14 +52,19 @@ bool recordVideo = false;
 std::string outputVideoFile;
 const int FPS = 30;
 AVFormatContext* formatContext = nullptr;
-AVCodecContext* codecContext = nullptr;
+AVCodecContext* videoCodecContext = nullptr;
+AVCodecContext* audioCodecContext = nullptr;
 AVStream* videoStream = nullptr;
+AVStream* audioStream = nullptr;
 SwsContext* swsContext = nullptr;
-AVFrame* frame = nullptr;
+AVFrame* videoFrame = nullptr;
 AVFrame* rgbFrame = nullptr;
+AVFrame* audioFrame = nullptr;
 AVPacket* packet = nullptr;
 int frameCount = 0;
 std::vector<uint8_t> frameBuffer;
+size_t audioEncodedPosition = 0;
+const int AUDIO_ENCODE_BUFFER_SIZE = 1024;
 
 // Forward declarations
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -67,6 +73,7 @@ void renderWaveform();
 bool initializeVideoEncoder();
 void finalizeVideoEncoder();
 void captureFrame();
+void encodeAudioFrame();
 
 // Audio callback function for PortAudio
 static int paCallback(const void* inputBuffer, void* outputBuffer,
@@ -174,39 +181,46 @@ bool initializeVideoEncoder() {
     frameBuffer.resize(WIDTH * HEIGHT * 3); // RGB format
     
     // Initialize FFmpeg components
-    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-    if (!codec) {
+    const AVCodec* videoCodec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (!videoCodec) {
         std::cerr << "Could not find H.264 encoder" << std::endl;
         return false;
     }
     
-    codecContext = avcodec_alloc_context3(codec);
-    if (!codecContext) {
-        std::cerr << "Could not allocate video codec context" << std::endl;
-        return false;
-    }
-    
-    // Set codec parameters
-    codecContext->width = WIDTH;
-    codecContext->height = HEIGHT;
-    codecContext->time_base = (AVRational){1, FPS};
-    codecContext->framerate = (AVRational){FPS, 1};
-    codecContext->pix_fmt = AV_PIX_FMT_YUV420P;
-    codecContext->gop_size = 12;
-    codecContext->max_b_frames = 2;
-    
-    // Set codec-specific options
-    av_opt_set(codecContext->priv_data, "preset", "medium", 0);
-    
-    // Open codec
-    if (avcodec_open2(codecContext, codec, nullptr) < 0) {
-        std::cerr << "Could not open codec" << std::endl;
+    const AVCodec* audioCodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    if (!audioCodec) {
+        std::cerr << "Could not find AAC encoder" << std::endl;
         return false;
     }
     
     // Create output format context
     if (avformat_alloc_output_context2(&formatContext, nullptr, nullptr, outputVideoFile.c_str()) < 0) {
         std::cerr << "Could not create output context" << std::endl;
+        return false;
+    }
+    
+    // Set up video codec context
+    videoCodecContext = avcodec_alloc_context3(videoCodec);
+    if (!videoCodecContext) {
+        std::cerr << "Could not allocate video codec context" << std::endl;
+        return false;
+    }
+    
+    // Set video codec parameters
+    videoCodecContext->width = WIDTH;
+    videoCodecContext->height = HEIGHT;
+    videoCodecContext->time_base = (AVRational){1, FPS};
+    videoCodecContext->framerate = (AVRational){FPS, 1};
+    videoCodecContext->pix_fmt = AV_PIX_FMT_YUV420P;
+    videoCodecContext->gop_size = 12;
+    videoCodecContext->max_b_frames = 2;
+    
+    // Set codec-specific options
+    av_opt_set(videoCodecContext->priv_data, "preset", "medium", 0);
+    
+    // Open video codec
+    if (avcodec_open2(videoCodecContext, videoCodec, nullptr) < 0) {
+        std::cerr << "Could not open video codec" << std::endl;
         return false;
     }
     
@@ -217,8 +231,43 @@ bool initializeVideoEncoder() {
         return false;
     }
     
-    videoStream->time_base = codecContext->time_base;
-    avcodec_parameters_from_context(videoStream->codecpar, codecContext);
+    videoStream->time_base = videoCodecContext->time_base;
+    avcodec_parameters_from_context(videoStream->codecpar, videoCodecContext);
+    
+    // Set up audio codec context
+    audioCodecContext = avcodec_alloc_context3(audioCodec);
+    if (!audioCodecContext) {
+        std::cerr << "Could not allocate audio codec context" << std::endl;
+        return false;
+    }
+    
+    // Set audio codec parameters
+    audioCodecContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    audioCodecContext->sample_rate = SAMPLE_RATE;
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+    audioCodecContext->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
+#else
+    audioCodecContext->channel_layout = AV_CH_LAYOUT_MONO;
+    audioCodecContext->channels = 1;
+#endif
+    audioCodecContext->time_base = (AVRational){1, SAMPLE_RATE};
+    audioCodecContext->bit_rate = 128000;
+    
+    // Open audio codec
+    if (avcodec_open2(audioCodecContext, audioCodec, nullptr) < 0) {
+        std::cerr << "Could not open audio codec" << std::endl;
+        return false;
+    }
+    
+    // Add audio stream
+    audioStream = avformat_new_stream(formatContext, nullptr);
+    if (!audioStream) {
+        std::cerr << "Could not create audio stream" << std::endl;
+        return false;
+    }
+    
+    audioStream->time_base = audioCodecContext->time_base;
+    avcodec_parameters_from_context(audioStream->codecpar, audioCodecContext);
     
     // Open output file
     if (!(formatContext->oformat->flags & AVFMT_NOFILE)) {
@@ -234,31 +283,54 @@ bool initializeVideoEncoder() {
         return false;
     }
     
-    // Allocate frames
-    frame = av_frame_alloc();
+    // Allocate video frames
+    videoFrame = av_frame_alloc();
     rgbFrame = av_frame_alloc();
-    if (!frame || !rgbFrame) {
+    if (!videoFrame || !rgbFrame) {
         std::cerr << "Could not allocate video frames" << std::endl;
         return false;
     }
     
-    frame->format = codecContext->pix_fmt;
-    frame->width = codecContext->width;
-    frame->height = codecContext->height;
+    videoFrame->format = videoCodecContext->pix_fmt;
+    videoFrame->width = videoCodecContext->width;
+    videoFrame->height = videoCodecContext->height;
     
     rgbFrame->format = AV_PIX_FMT_RGB24;
-    rgbFrame->width = codecContext->width;
-    rgbFrame->height = codecContext->height;
+    rgbFrame->width = videoCodecContext->width;
+    rgbFrame->height = videoCodecContext->height;
     
-    if (av_frame_get_buffer(frame, 0) < 0 || av_frame_get_buffer(rgbFrame, 0) < 0) {
+    if (av_frame_get_buffer(videoFrame, 0) < 0 || av_frame_get_buffer(rgbFrame, 0) < 0) {
         std::cerr << "Could not allocate frame buffers" << std::endl;
+        return false;
+    }
+    
+    // Allocate audio frame
+    audioFrame = av_frame_alloc();
+    if (!audioFrame) {
+        std::cerr << "Could not allocate audio frame" << std::endl;
+        return false;
+    }
+    
+    audioFrame->format = audioCodecContext->sample_fmt;
+#if LIBAVUTIL_VERSION_MAJOR >= 57
+    audioFrame->ch_layout = audioCodecContext->ch_layout;
+#else
+    audioFrame->channel_layout = audioCodecContext->channel_layout;
+    audioFrame->channels = audioCodecContext->channels;
+#endif
+    audioFrame->sample_rate = audioCodecContext->sample_rate;
+    audioFrame->nb_samples = audioCodecContext->frame_size != 0 ? 
+                            audioCodecContext->frame_size : AUDIO_ENCODE_BUFFER_SIZE;
+    
+    if (av_frame_get_buffer(audioFrame, 0) < 0) {
+        std::cerr << "Could not allocate audio frame buffer" << std::endl;
         return false;
     }
     
     // Initialize conversion context
     swsContext = sws_getContext(
         WIDTH, HEIGHT, AV_PIX_FMT_RGB24,
-        WIDTH, HEIGHT, codecContext->pix_fmt,
+        WIDTH, HEIGHT, videoCodecContext->pix_fmt,
         SWS_BILINEAR, nullptr, nullptr, nullptr
     );
     
@@ -282,14 +354,26 @@ bool initializeVideoEncoder() {
 void finalizeVideoEncoder() {
     if (!recordVideo || !formatContext) return;
     
-    // Flush encoder
-    avcodec_send_frame(codecContext, nullptr);
+    // Flush video encoder
+    avcodec_send_frame(videoCodecContext, nullptr);
     while (true) {
-        int ret = avcodec_receive_packet(codecContext, packet);
+        int ret = avcodec_receive_packet(videoCodecContext, packet);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
         
-        av_packet_rescale_ts(packet, codecContext->time_base, videoStream->time_base);
+        av_packet_rescale_ts(packet, videoCodecContext->time_base, videoStream->time_base);
         packet->stream_index = videoStream->index;
+        av_interleaved_write_frame(formatContext, packet);
+        av_packet_unref(packet);
+    }
+    
+    // Flush audio encoder
+    avcodec_send_frame(audioCodecContext, nullptr);
+    while (true) {
+        int ret = avcodec_receive_packet(audioCodecContext, packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        
+        av_packet_rescale_ts(packet, audioCodecContext->time_base, audioStream->time_base);
+        packet->stream_index = audioStream->index;
         av_interleaved_write_frame(formatContext, packet);
         av_packet_unref(packet);
     }
@@ -303,10 +387,12 @@ void finalizeVideoEncoder() {
     }
     
     // Free resources
-    av_frame_free(&frame);
+    av_frame_free(&videoFrame);
     av_frame_free(&rgbFrame);
+    av_frame_free(&audioFrame);
     av_packet_free(&packet);
-    avcodec_free_context(&codecContext);
+    avcodec_free_context(&videoCodecContext);
+    avcodec_free_context(&audioCodecContext);
     avformat_free_context(formatContext);
     sws_freeContext(swsContext);
     
@@ -334,26 +420,26 @@ void captureFrame() {
     
     // Convert RGB to YUV
     sws_scale(swsContext, rgbFrame->data, rgbFrame->linesize, 0, HEIGHT,
-              frame->data, frame->linesize);
+              videoFrame->data, videoFrame->linesize);
     
     // Set frame timestamp
-    frame->pts = frameCount++;
+    videoFrame->pts = frameCount++;
     
     // Encode frame
-    if (avcodec_send_frame(codecContext, frame) < 0) {
+    if (avcodec_send_frame(videoCodecContext, videoFrame) < 0) {
         std::cerr << "Error sending frame to encoder" << std::endl;
         return;
     }
     
     while (true) {
-        int ret = avcodec_receive_packet(codecContext, packet);
+        int ret = avcodec_receive_packet(videoCodecContext, packet);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
         if (ret < 0) {
             std::cerr << "Error receiving packet from encoder" << std::endl;
             break;
         }
         
-        av_packet_rescale_ts(packet, codecContext->time_base, videoStream->time_base);
+        av_packet_rescale_ts(packet, videoCodecContext->time_base, videoStream->time_base);
         packet->stream_index = videoStream->index;
         
         if (av_interleaved_write_frame(formatContext, packet) < 0) {
@@ -361,6 +447,73 @@ void captureFrame() {
         }
         
         av_packet_unref(packet);
+    }
+    
+    // Encode audio frames
+    encodeAudioFrame();
+}
+
+// Encode audio data
+void encodeAudioFrame() {
+    if (!recordVideo || !formatContext) return;
+    
+    // Calculate how many audio samples to process for this video frame
+    // to keep audio and video in sync
+    int samplesPerFrame = SAMPLE_RATE / FPS;
+    
+    // Loop until we've encoded enough audio for this video frame
+    for (int i = 0; i < samplesPerFrame / audioFrame->nb_samples + 1; i++) {
+        if (audioEncodedPosition >= audioData.size()) {
+            break; // No more audio data to encode
+        }
+        
+        // Calculate number of samples to encode in this frame
+        int samplesToEncode = std::min(
+            (size_t)audioFrame->nb_samples,
+            audioData.size() - audioEncodedPosition
+        );
+        
+        if (samplesToEncode <= 0) break;
+        
+        // Set number of samples in the frame
+        audioFrame->nb_samples = samplesToEncode;
+        
+        // Copy audio data to frame
+        // AAC requires planar audio format (FLTP)
+        float* audioFrameData = (float*)audioFrame->data[0];
+        for (int j = 0; j < samplesToEncode; j++) {
+            audioFrameData[j] = audioData[audioEncodedPosition + j];
+        }
+        
+        // Set frame timestamp
+        audioFrame->pts = audioEncodedPosition;
+        
+        // Move position
+        audioEncodedPosition += samplesToEncode;
+        
+        // Encode audio frame
+        if (avcodec_send_frame(audioCodecContext, audioFrame) < 0) {
+            std::cerr << "Error sending audio frame to encoder" << std::endl;
+            return;
+        }
+        
+        while (true) {
+            int ret = avcodec_receive_packet(audioCodecContext, packet);
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+            if (ret < 0) {
+                std::cerr << "Error receiving audio packet from encoder" << std::endl;
+                break;
+            }
+            
+            av_packet_rescale_ts(packet, audioCodecContext->time_base, audioStream->time_base);
+            packet->stream_index = audioStream->index;
+            
+            if (av_interleaved_write_frame(formatContext, packet) < 0) {
+                std::cerr << "Error writing audio frame to file" << std::endl;
+            }
+            
+            av_packet_unref(packet);
+        }
     }
 }
 

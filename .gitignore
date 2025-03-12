@@ -21,10 +21,6 @@ cmake_install.cmake
 *.swp
 *.swo
 *.DS_Store
-
-# Ignore editor/IDE-specific files
-.vscode/
-.idea/
-*.code-workspace
-*.sublime-workspace
+*.mp4
+*.wav
 visualizer
