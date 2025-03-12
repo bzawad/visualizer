@@ -20,6 +20,9 @@ g++ $CXXFLAGS -c waveform.cpp -o waveform.o
 echo "Compiling multi_band_waveform.cpp..."
 g++ $CXXFLAGS -c multi_band_waveform.cpp -o multi_band_waveform.o
 
+echo "Compiling ascii_bar_equalizer.cpp..."
+g++ $CXXFLAGS -c ascii_bar_equalizer.cpp -o ascii_bar_equalizer.o
+
 echo "Compiling visualizer_factory.cpp..."
 g++ $CXXFLAGS -c visualizer_factory.cpp -o visualizer_factory.o
 
@@ -29,6 +32,6 @@ g++ $CXXFLAGS -c visualizer.cpp -o visualizer.o
 
 # Link all object files
 echo "Linking..."
-g++ visualizer.o bar_equalizer.o waveform.o multi_band_waveform.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
+g++ visualizer.o bar_equalizer.o waveform.o multi_band_waveform.o ascii_bar_equalizer.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
 
 echo "Build complete. Run with: ./visualizer"

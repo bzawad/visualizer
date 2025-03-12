@@ -692,6 +692,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = MULTI_BAND_WAVEFORM;
             break;
         case MULTI_BAND_WAVEFORM:
+            currentVisualizerType = ASCII_BAR_EQUALIZER;
+            break;
+        case ASCII_BAR_EQUALIZER:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -765,7 +768,7 @@ int main(int argc, char **argv)
 
     if (wavFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband] [--record output.mp4] <wav_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
 
@@ -780,6 +783,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band")
     {
         currentVisualizerType = MULTI_BAND_WAVEFORM;
+    }
+    else if (visualizerTypeName == "ascii")
+    {
+        currentVisualizerType = ASCII_BAR_EQUALIZER;
     }
     else
     {

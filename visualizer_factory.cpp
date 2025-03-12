@@ -2,6 +2,7 @@
 #include "bar_equalizer.h"
 #include "waveform.h"
 #include "multi_band_waveform.h"
+#include "ascii_bar_equalizer.h"
 #include <algorithm>
 #include <cctype>
 
@@ -15,6 +16,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<Waveform>();
     case MULTI_BAND_WAVEFORM:
         return std::make_shared<MultiBandWaveform>();
+    case ASCII_BAR_EQUALIZER:
+        return std::make_shared<AsciiBarEqualizer>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -40,6 +43,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(MULTI_BAND_WAVEFORM);
     }
+    else if (lowerName == "ascii" || lowerName == "ascii_bars" || lowerName == "ascii_equalizer")
+    {
+        return createVisualizer(ASCII_BAR_EQUALIZER);
+    }
     else
     {
         // Default to bar equalizer
@@ -57,6 +64,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Waveform";
     case MULTI_BAND_WAVEFORM:
         return "Multi-Band Waveform";
+    case ASCII_BAR_EQUALIZER:
+        return "ASCII Bar Equalizer";
     default:
         return "Unknown";
     }

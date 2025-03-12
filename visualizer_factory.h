@@ -9,7 +9,8 @@ enum VisualizerType
 {
     BAR_EQUALIZER,
     WAVEFORM,
-    MULTI_BAND_WAVEFORM
+    MULTI_BAND_WAVEFORM,
+    ASCII_BAR_EQUALIZER
 };
 
 class VisualizerFactory
