@@ -5,12 +5,12 @@
 #include <vector>
 #include <cmath>
 #include <sndfile.h>
-#include <portaudio.h>
 #include <string>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <cstring> // For strcmp
+#include <chrono>  // For timing
 
 // FFmpeg libraries
 extern "C" {
@@ -39,13 +39,9 @@ double in[N];               // Input signal
 fftw_complex out[N];        // FFT output
 fftw_plan plan;             // FFTW plan
 
-// Audio playback settings
+// Audio settings
 const int SAMPLE_RATE = 44100;
-const int FRAMES_PER_BUFFER = 512;
 std::vector<float> audioData;
-std::atomic<bool> playbackFinished(false);
-std::atomic<size_t> currentPosition(0);
-std::mutex audioMutex;
 
 // Video recording settings
 bool recordVideo = false;
@@ -61,63 +57,34 @@ AVFrame* videoFrame = nullptr;
 AVFrame* rgbFrame = nullptr;
 AVFrame* audioFrame = nullptr;
 AVPacket* packet = nullptr;
-int frameCount = 0;
 std::vector<uint8_t> frameBuffer;
-size_t audioEncodedPosition = 0;
-const int AUDIO_ENCODE_BUFFER_SIZE = 1024;
 
 // Forward declarations
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 bool loadWavFile(const std::string& filename);
-void renderWaveform();
+void renderFrameAtTime(float timeSeconds);
 bool initializeVideoEncoder();
 void finalizeVideoEncoder();
-void captureFrame();
-void encodeAudioFrame();
-
-// Audio callback function for PortAudio
-static int paCallback(const void* inputBuffer, void* outputBuffer,
-                     unsigned long framesPerBuffer,
-                     const PaStreamCallbackTimeInfo* timeInfo,
-                     PaStreamCallbackFlags statusFlags,
-                     void* userData) {
-    
-    // Mark unused parameters to silence compiler warnings
-    (void)inputBuffer;  // Already marked as unused
-    (void)timeInfo;     // Mark as unused
-    (void)statusFlags;  // Mark as unused
-    (void)userData;     // Mark as unused
-    
-    float* out = (float*)outputBuffer;
-    
-    size_t position = currentPosition.load();
-    
-    // Copy data to FFT input buffer for visualization
-    std::lock_guard<std::mutex> lock(audioMutex);
-    for (unsigned long i = 0; i < framesPerBuffer; i++) {
-        if (position + i < audioData.size()) {
-            out[i] = audioData[position + i];
-            // If we have enough samples, update FFT input (reuse older samples if needed)
-            if (i < N) {
-                in[i] = (double)audioData[position + i];
-            }
-        } else {
-            out[i] = 0.0f;
-            playbackFinished = true;
-        }
-    }
-    
-    // Update position
-    position += framesPerBuffer;
-    currentPosition.store(position);
-    
-    return playbackFinished ? paComplete : paContinue;
-}
+void encodeVideoFrame(int frameIndex);
+void encodeAudioForFrame(int frameIndex, int totalFrames);
 
 // OpenGL rendering function for bar visualization
-void renderFFT() {
+void renderFFT(float timeSeconds) {
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+    
+    // Calculate the sample index for the current time
+    size_t sampleIndex = static_cast<size_t>(timeSeconds * SAMPLE_RATE);
+    if (sampleIndex >= audioData.size()) return;
+    
+    // Fill the FFT input buffer with samples at this time
+    for (int i = 0; i < N; i++) {
+        if (sampleIndex + i < audioData.size()) {
+            in[i] = audioData[sampleIndex + i];
+        } else {
+            in[i] = 0.0;
+        }
+    }
     
     // Execute FFT
     fftw_execute(plan);
@@ -156,23 +123,35 @@ void renderFFT() {
 }
 
 // OpenGL rendering function for waveform visualization
-void renderWaveform() {
+void renderWaveform(float timeSeconds) {
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+    
+    // Calculate the sample index for the current time
+    size_t sampleIndex = static_cast<size_t>(timeSeconds * SAMPLE_RATE);
+    if (sampleIndex >= audioData.size()) return;
     
     glBegin(GL_LINE_STRIP);
     
     // Display a window of samples from the current position
-    size_t position = currentPosition.load();
-    int sampleCount = std::min(N, (int)audioData.size() - (int)position);
+    int sampleCount = std::min(N, (int)audioData.size() - (int)sampleIndex);
     
     for (int i = 0; i < sampleCount; i++) {
         float x = -1.0f + 2.0f * i / (float)(sampleCount - 1);
-        float y = audioData[position + i] * 0.8f; // Scale to prevent clipping
+        float y = audioData[sampleIndex + i] * 0.8f; // Scale to prevent clipping
         glVertex2f(x, y);
     }
     
     glEnd();
+}
+
+// Render a frame at the specified time
+void renderFrameAtTime(float timeSeconds) {
+    if (currentVisualizer == BAR_EQUALIZER) {
+        renderFFT(timeSeconds);
+    } else {
+        renderWaveform(timeSeconds);
+    }
 }
 
 // Initialize video encoder
@@ -242,7 +221,7 @@ bool initializeVideoEncoder() {
     }
     
     // Set audio codec parameters
-    audioCodecContext->sample_fmt = AV_SAMPLE_FMT_FLTP;
+    audioCodecContext->sample_fmt = AV_SAMPLE_FMT_FLTP; // planar float format
     audioCodecContext->sample_rate = SAMPLE_RATE;
 #if LIBAVUTIL_VERSION_MAJOR >= 57
     audioCodecContext->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
@@ -304,7 +283,16 @@ bool initializeVideoEncoder() {
         return false;
     }
     
-    // Allocate audio frame
+    // Allocate audio frame - we'll use the frame size reported by the encoder
+    int frameSize = audioCodecContext->frame_size;
+    if (frameSize <= 0) {
+        // AAC typically uses 1024 samples per frame
+        frameSize = 1024;
+        std::cout << "Using default AAC frame size: " << frameSize << std::endl;
+    } else {
+        std::cout << "AAC encoder frame size: " << frameSize << std::endl;
+    }
+    
     audioFrame = av_frame_alloc();
     if (!audioFrame) {
         std::cerr << "Could not allocate audio frame" << std::endl;
@@ -319,8 +307,7 @@ bool initializeVideoEncoder() {
     audioFrame->channels = audioCodecContext->channels;
 #endif
     audioFrame->sample_rate = audioCodecContext->sample_rate;
-    audioFrame->nb_samples = audioCodecContext->frame_size != 0 ? 
-                            audioCodecContext->frame_size : AUDIO_ENCODE_BUFFER_SIZE;
+    audioFrame->nb_samples = frameSize;
     
     if (av_frame_get_buffer(audioFrame, 0) < 0) {
         std::cerr << "Could not allocate audio frame buffer" << std::endl;
@@ -399,8 +386,8 @@ void finalizeVideoEncoder() {
     std::cout << "Video saved to: " << outputVideoFile << std::endl;
 }
 
-// Capture current frame for video
-void captureFrame() {
+// Encode a video frame at the specified index
+void encodeVideoFrame(int frameIndex) {
     if (!recordVideo || !formatContext) return;
     
     // Read pixels from OpenGL framebuffer
@@ -422,8 +409,8 @@ void captureFrame() {
     sws_scale(swsContext, rgbFrame->data, rgbFrame->linesize, 0, HEIGHT,
               videoFrame->data, videoFrame->linesize);
     
-    // Set frame timestamp
-    videoFrame->pts = frameCount++;
+    // Set frame timestamp using frame index
+    videoFrame->pts = frameIndex;
     
     // Encode frame
     if (avcodec_send_frame(videoCodecContext, videoFrame) < 0) {
@@ -448,57 +435,58 @@ void captureFrame() {
         
         av_packet_unref(packet);
     }
-    
-    // Encode audio frames
-    encodeAudioFrame();
 }
 
-// Encode audio data
-void encodeAudioFrame() {
+// Encode audio data corresponding to the specified frame
+void encodeAudioForFrame(int frameIndex, int totalFrames) {
     if (!recordVideo || !formatContext) return;
     
-    // Calculate how many audio samples to process for this video frame
-    // to keep audio and video in sync
-    int samplesPerFrame = SAMPLE_RATE / FPS;
+    // Get audio frame size from the context
+    const int frameSize = audioFrame->nb_samples;
+    if (frameSize <= 0) {
+        std::cerr << "Invalid audio frame size" << std::endl;
+        return;
+    }
     
-    // Loop until we've encoded enough audio for this video frame
-    for (int i = 0; i < samplesPerFrame / audioFrame->nb_samples + 1; i++) {
-        if (audioEncodedPosition >= audioData.size()) {
-            break; // No more audio data to encode
-        }
+    // Calculate sample rate per frame for perfect alignment
+    const double samplesPerFrame = static_cast<double>(SAMPLE_RATE) / FPS;
+    
+    // Calculate start and end sample for this frame
+    int64_t startSample = static_cast<int64_t>(frameIndex * samplesPerFrame);
+    int64_t endSample = static_cast<int64_t>((frameIndex + 1) * samplesPerFrame);
+    
+    // Process audio in chunks of frameSize
+    for (int64_t pos = startSample; pos < endSample; pos += frameSize) {
+        // Prepare the audio frame
+        av_frame_make_writable(audioFrame);
         
-        // Calculate number of samples to encode in this frame
-        int samplesToEncode = std::min(
-            (size_t)audioFrame->nb_samples,
-            audioData.size() - audioEncodedPosition
-        );
-        
-        if (samplesToEncode <= 0) break;
-        
-        // Set number of samples in the frame
-        audioFrame->nb_samples = samplesToEncode;
-        
-        // Copy audio data to frame
-        // AAC requires planar audio format (FLTP)
+        // For planar float format (FLTP), we need to access the first plane
         float* audioFrameData = (float*)audioFrame->data[0];
-        for (int j = 0; j < samplesToEncode; j++) {
-            audioFrameData[j] = audioData[audioEncodedPosition + j];
+        
+        // Copy samples for the current frame
+        for (int i = 0; i < frameSize; i++) {
+            int64_t samplePos = pos + i;
+            if (samplePos < audioData.size()) {
+                audioFrameData[i] = audioData[samplePos];
+            } else {
+                audioFrameData[i] = 0.0f; // Pad with silence if needed
+            }
         }
         
-        // Set frame timestamp
-        audioFrame->pts = audioEncodedPosition;
+        // Set timestamp for this audio frame
+        audioFrame->pts = pos;
         
-        // Move position
-        audioEncodedPosition += samplesToEncode;
-        
-        // Encode audio frame
-        if (avcodec_send_frame(audioCodecContext, audioFrame) < 0) {
-            std::cerr << "Error sending audio frame to encoder" << std::endl;
-            return;
+        // Encode this audio frame
+        int ret = avcodec_send_frame(audioCodecContext, audioFrame);
+        if (ret < 0) {
+            char errBuf[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(ret, errBuf, AV_ERROR_MAX_STRING_SIZE);
+            std::cerr << "Error sending audio frame to encoder: " << errBuf << std::endl;
+            continue;
         }
         
         while (true) {
-            int ret = avcodec_receive_packet(audioCodecContext, packet);
+            ret = avcodec_receive_packet(audioCodecContext, packet);
             if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
             if (ret < 0) {
                 std::cerr << "Error receiving audio packet from encoder" << std::endl;
@@ -508,8 +496,11 @@ void encodeAudioFrame() {
             av_packet_rescale_ts(packet, audioCodecContext->time_base, audioStream->time_base);
             packet->stream_index = audioStream->index;
             
-            if (av_interleaved_write_frame(formatContext, packet) < 0) {
-                std::cerr << "Error writing audio frame to file" << std::endl;
+            ret = av_interleaved_write_frame(formatContext, packet);
+            if (ret < 0) {
+                char errBuf[AV_ERROR_MAX_STRING_SIZE];
+                av_strerror(ret, errBuf, AV_ERROR_MAX_STRING_SIZE);
+                std::cerr << "Error writing audio frame to file: " << errBuf << std::endl;
             }
             
             av_packet_unref(packet);
@@ -561,7 +552,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
 }
 
-// Main loop
+// Main function
 int main(int argc, char** argv) {
     std::string wavFile;
     
@@ -592,23 +583,19 @@ int main(int argc, char** argv) {
         return -1;
     }
     
-    // Initialize PortAudio
-    PaError err = Pa_Initialize();
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+    // Load WAV file
+    if (!loadWavFile(wavFile)) {
         return -1;
     }
     
-    // Load WAV file
-    if (!loadWavFile(wavFile)) {
-        Pa_Terminate();
-        return -1;
-    }
+    // Calculate total number of frames based on audio length
+    int totalFrames = static_cast<int>(std::ceil(audioData.size() / (static_cast<double>(SAMPLE_RATE) / FPS)));
+    std::cout << "Audio length: " << audioData.size() / static_cast<double>(SAMPLE_RATE) << " seconds" << std::endl;
+    std::cout << "Total frames to render: " << totalFrames << std::endl;
     
     // Initialize GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
-        Pa_Terminate();
         return -1;
     }
 
@@ -616,7 +603,6 @@ int main(int argc, char** argv) {
     if (!window) {
         std::cerr << "Failed to create window\n";
         glfwTerminate();
-        Pa_Terminate();
         return -1;
     }
 
@@ -642,85 +628,78 @@ int main(int argc, char** argv) {
         }
     }
     
-    // Set up audio stream
-    PaStream* stream;
-    err = Pa_OpenDefaultStream(&stream,
-                              0,          // No input channels
-                              1,          // Mono output
-                              paFloat32,  // 32-bit floating point output
-                              SAMPLE_RATE,
-                              FRAMES_PER_BUFFER,
-                              paCallback,
-                              NULL);
-    
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-        if (recordVideo) finalizeVideoEncoder();
-        fftw_destroy_plan(plan);
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        Pa_Terminate();
-        return -1;
-    }
-    
-    // Start audio stream
-    err = Pa_StartStream(stream);
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-        Pa_CloseStream(stream);
-        if (recordVideo) finalizeVideoEncoder();
-        fftw_destroy_plan(plan);
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        Pa_Terminate();
-        return -1;
-    }
-
-    // Main loop
-    while (!glfwWindowShouldClose(window)) {
-        // Render the selected visualization
-        if (currentVisualizer == BAR_EQUALIZER) {
-            renderFFT();
-        } else if (currentVisualizer == WAVEFORM) {
-            renderWaveform();
-        }
+    // Non-real-time rendering loop
+    if (recordVideo) {
+        std::cout << "Starting non-real-time rendering..." << std::endl;
         
-        // Capture frame for video if recording
-        if (recordVideo) {
-            captureFrame();
-        }
+        auto startTime = std::chrono::high_resolution_clock::now();
         
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-        
-        // If playback finished and we want to loop, reset position
-        if (playbackFinished) {
-            // If recording, finish when playback finishes
-            if (recordVideo) {
-                glfwSetWindowShouldClose(window, GLFW_TRUE);
+        for (int frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+            // Calculate time for this frame
+            float timeSeconds = frameIndex / static_cast<float>(FPS);
+            
+            // Render the visualization for this time
+            renderFrameAtTime(timeSeconds);
+            
+            // Capture and encode the video frame
+            encodeVideoFrame(frameIndex);
+            
+            // Encode the corresponding audio segment
+            encodeAudioForFrame(frameIndex, totalFrames);
+            
+            // Update the window to show progress (but don't wait for vsync)
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+            
+            // Show progress
+            if (frameIndex % 30 == 0 || frameIndex == totalFrames - 1) {
+                float progress = 100.0f * frameIndex / totalFrames;
+                std::cout << "Rendering: " << progress << "% complete (" 
+                          << frameIndex << "/" << totalFrames << " frames)" << std::endl;
             }
             
-            // Uncomment to enable looping
-            // currentPosition.store(0);
-            // playbackFinished = false;
+            // Check if user wants to cancel
+            if (glfwWindowShouldClose(window)) {
+                std::cout << "Rendering canceled by user." << std::endl;
+                break;
+            }
+        }
+        
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        std::cout << "Rendering completed in " << duration.count() / 1000.0 << " seconds." << std::endl;
+        
+        // Finalize video encoding
+        finalizeVideoEncoder();
+    } else {
+        // Interactive mode for visualization only - simple rendering loop
+        while (!glfwWindowShouldClose(window)) {
+            // For interactive mode, we'll just use a time counter
+            static float timeSeconds = 0.0f;
+            
+            // Render the visualization for the current time
+            renderFrameAtTime(timeSeconds);
+            
+            // Advance time (wrapping around if needed)
+            timeSeconds += 1.0f / FPS;
+            if (timeSeconds * SAMPLE_RATE >= audioData.size()) {
+                timeSeconds = 0.0f;
+            }
+            
+            // Update the window
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+            
+            // Cap the frame rate
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(1000.0f / FPS)));
         }
     }
-
+    
     // Clean up
-    if (stream) {
-        Pa_StopStream(stream);
-        Pa_CloseStream(stream);
-    }
-    
-    // Finalize video if recording
-    if (recordVideo) {
-        finalizeVideoEncoder();
-    }
-    
     fftw_destroy_plan(plan);
     glfwDestroyWindow(window);
     glfwTerminate();
-    Pa_Terminate();
     
     return 0;
 }
+
