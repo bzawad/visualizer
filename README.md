@@ -4,10 +4,13 @@ A simple music visualizer that plays a WAV file and displays a frequency or wave
 
 ## Features
 
-- Play mono WAV files
+- Play mono or stereo WAV files
 - Multiple visualization types:
   - Frequency bars (16 green bars)
   - Waveform display
+  - Multiband waveforms
+  - ASCII frequency bars
+  - Spectrogram
 - Record visualizations to MP4 video files
 - Press Escape to exit the visualizer
 
