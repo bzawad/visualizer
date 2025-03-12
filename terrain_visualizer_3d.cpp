@@ -271,6 +271,15 @@ void TerrainVisualizer3D::renderTerrain()
         1.0f    // Highest (full width)
     };
     
+    // Add height scaling for each band - higher frequencies get taller
+    const float heightScales[NUM_BANDS] = {
+        0.7f,   // Lowest frequencies (shortest)
+        0.85f,  // Low-Mid
+        1.0f,   // Mid
+        1.15f,  // Mid-High
+        1.3f    // Highest frequencies (tallest)
+    };
+    
     // Draw reference grid
     glColor3fv(GRID_COLOR);
     glLineWidth(1.0f);
@@ -307,16 +316,17 @@ void TerrainVisualizer3D::renderTerrain()
     glLineWidth(LINE_WIDTH);
     glColor3fv(BAND_COLOR);
     
-    // Draw each band's waveform with varying width
+    // Draw each band's waveform with varying width and height
     for (int band = 0; band < NUM_BANDS; band++) {
         float z = zPositions[band];
         float width = TERRAIN_WIDTH * widthScales[band];
+        float heightScale = heightScales[band];
         
         // Draw the waveform line
         glBegin(GL_LINE_STRIP);
         for (int i = 0; i < POINTS_PER_BAND; i++) {
             float x = -width/2 + i * (width / (POINTS_PER_BAND - 1));
-            float y = bandData[band][i] * TERRAIN_HEIGHT;
+            float y = bandData[band][i] * TERRAIN_HEIGHT * heightScale;
             glVertex3f(x, y, z);
         }
         glEnd();
@@ -328,6 +338,8 @@ void TerrainVisualizer3D::renderTerrain()
         float z2 = zPositions[band + 1];
         float width1 = TERRAIN_WIDTH * widthScales[band];
         float width2 = TERRAIN_WIDTH * widthScales[band + 1];
+        float heightScale1 = heightScales[band];
+        float heightScale2 = heightScales[band + 1];
         
         // Draw connection lines every 20 points
         glBegin(GL_LINES);
@@ -335,8 +347,8 @@ void TerrainVisualizer3D::renderTerrain()
             float t = static_cast<float>(i) / (POINTS_PER_BAND - 1);
             float x1 = -width1/2 + t * width1;
             float x2 = -width2/2 + t * width2;
-            float y1 = bandData[band][i] * TERRAIN_HEIGHT;
-            float y2 = bandData[band + 1][i] * TERRAIN_HEIGHT;
+            float y1 = bandData[band][i] * TERRAIN_HEIGHT * heightScale1;
+            float y2 = bandData[band + 1][i] * TERRAIN_HEIGHT * heightScale2;
             
             // Draw line connecting the two bands
             glVertex3f(x1, y1, z1);
