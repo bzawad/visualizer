@@ -192,9 +192,16 @@ void renderWaveform(float timeSeconds) {
 
 // OpenGL rendering function for live mode (using PortAudio position)
 void renderLiveVisualization() {
+    // Apply the same consistent viewport and matrix settings 
+    glClear(GL_COLOR_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1, 1, -1, 1, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    
     if (currentVisualizer == BAR_EQUALIZER) {
         // For live mode, just execute FFT on current buffer without timeSeconds
-        glClear(GL_COLOR_BUFFER_BIT);
         glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
         
         // Execute FFT
@@ -233,7 +240,6 @@ void renderLiveVisualization() {
         }
     } else {
         // Waveform visualization for live mode
-        glClear(GL_COLOR_BUFFER_BIT);
         glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
         
         glBegin(GL_LINE_STRIP);
@@ -254,13 +260,8 @@ void renderLiveVisualization() {
 
 // Render a frame at the specified time
 void renderFrameAtTime(float timeSeconds) {
-    // Ensure rendering state is consistent for both recording and live modes
+    // The OpenGL state (viewport, matrices) is now set by the caller
     glClear(GL_COLOR_BUFFER_BIT);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(-1, 1, -1, 1, -1, 1);
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
     
     if (currentVisualizer == BAR_EQUALIZER) {
         renderFFT(timeSeconds);
@@ -805,9 +806,25 @@ int main(int argc, char** argv) {
         
         auto startTime = std::chrono::high_resolution_clock::now();
         
+        // Ensure the viewport and projection are set up correctly before starting
+        glViewport(0, 0, WIDTH, HEIGHT);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-1, 1, -1, 1, -1, 1);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        
         for (int frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
             // Calculate time for this frame
             float timeSeconds = frameIndex / static_cast<float>(FPS);
+            
+            // Apply consistent viewport and matrix settings before each render
+            glViewport(0, 0, WIDTH, HEIGHT);
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(-1, 1, -1, 1, -1, 1);
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
             
             // Render the visualization for this time
             renderFrameAtTime(timeSeconds);
