@@ -695,6 +695,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = ASCII_BAR_EQUALIZER;
             break;
         case ASCII_BAR_EQUALIZER:
+            currentVisualizerType = SPECTROGRAM;
+            break;
+        case SPECTROGRAM:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -768,7 +771,7 @@ int main(int argc, char **argv)
 
     if (wavFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii] [--record output.mp4] <wav_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
 
@@ -787,6 +790,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "ascii")
     {
         currentVisualizerType = ASCII_BAR_EQUALIZER;
+    }
+    else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
+    {
+        currentVisualizerType = SPECTROGRAM;
     }
     else
     {

@@ -3,6 +3,7 @@
 #include "waveform.h"
 #include "multi_band_waveform.h"
 #include "ascii_bar_equalizer.h"
+#include "spectrogram.h"
 #include <algorithm>
 #include <cctype>
 
@@ -18,6 +19,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<MultiBandWaveform>();
     case ASCII_BAR_EQUALIZER:
         return std::make_shared<AsciiBarEqualizer>();
+    case SPECTROGRAM:
+        return std::make_shared<Spectrogram>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -47,6 +50,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(ASCII_BAR_EQUALIZER);
     }
+    else if (lowerName == "spectrogram" || lowerName == "spectrum")
+    {
+        return createVisualizer(SPECTROGRAM);
+    }
     else
     {
         // Default to bar equalizer
@@ -66,6 +73,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Multi-Band Waveform";
     case ASCII_BAR_EQUALIZER:
         return "ASCII Bar Equalizer";
+    case SPECTROGRAM:
+        return "Spectrogram";
     default:
         return "Unknown";
     }
