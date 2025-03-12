@@ -5,6 +5,7 @@
 #include <vector>
 #include <cmath>
 #include <sndfile.h>
+#include <portaudio.h> // Add PortAudio back for live playback
 #include <string>
 #include <thread>
 #include <mutex>
@@ -41,7 +42,11 @@ fftw_plan plan;             // FFTW plan
 
 // Audio settings
 const int SAMPLE_RATE = 44100;
+const int FRAMES_PER_BUFFER = 512; // For PortAudio
 std::vector<float> audioData;
+std::atomic<bool> playbackFinished(false); // For live mode
+std::atomic<size_t> currentPosition(0);    // For live mode
+std::mutex audioMutex;                     // For live mode
 
 // Video recording settings
 bool recordVideo = false;
@@ -66,7 +71,46 @@ void renderFrameAtTime(float timeSeconds);
 bool initializeVideoEncoder();
 void finalizeVideoEncoder();
 void encodeVideoFrame(int frameIndex);
-void encodeAudioForFrame(int frameIndex, int totalFrames);
+void encodeAudioForFrame(int frameIndex); // Remove unused parameter
+
+// Audio callback function for PortAudio (for live playback)
+static int paCallback(const void* inputBuffer, void* outputBuffer,
+                     unsigned long framesPerBuffer,
+                     const PaStreamCallbackTimeInfo* timeInfo,
+                     PaStreamCallbackFlags statusFlags,
+                     void* userData) {
+    
+    // Mark unused parameters to silence compiler warnings
+    (void)inputBuffer;
+    (void)timeInfo;
+    (void)statusFlags;
+    (void)userData;
+    
+    float* out = (float*)outputBuffer;
+    
+    size_t position = currentPosition.load();
+    
+    // Copy data to FFT input buffer for visualization
+    std::lock_guard<std::mutex> lock(audioMutex);
+    for (unsigned long i = 0; i < framesPerBuffer; i++) {
+        if (position + i < audioData.size()) {
+            out[i] = audioData[position + i];
+            // If we have enough samples, update FFT input
+            if (i < N) {
+                in[i] = (double)audioData[position + i];
+            }
+        } else {
+            out[i] = 0.0f;
+            playbackFinished = true;
+        }
+    }
+    
+    // Update position
+    position += framesPerBuffer;
+    currentPosition.store(position);
+    
+    return playbackFinished ? paComplete : paContinue;
+}
 
 // OpenGL rendering function for bar visualization
 void renderFFT(float timeSeconds) {
@@ -143,6 +187,68 @@ void renderWaveform(float timeSeconds) {
     }
     
     glEnd();
+}
+
+// OpenGL rendering function for live mode (using PortAudio position)
+void renderLiveVisualization() {
+    if (currentVisualizer == BAR_EQUALIZER) {
+        // For live mode, just execute FFT on current buffer without timeSeconds
+        glClear(GL_COLOR_BUFFER_BIT);
+        glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+        
+        // Execute FFT
+        fftw_execute(plan);
+        
+        // Calculate frequency bands for 16 bars
+        float barWidth = 2.0f / NUM_BARS; // normalized width in [-1, 1] space
+        
+        for (int i = 0; i < NUM_BARS; i++) {
+            // Map bar index to frequency range (logarithmic scale for better visual)
+            int startIdx = (int)(pow(N/2, (float)i / NUM_BARS) - 1);
+            int endIdx = (int)(pow(N/2, (float)(i+1) / NUM_BARS) - 1);
+            startIdx = std::max(0, startIdx);
+            endIdx = std::min(N/2 - 1, endIdx);
+            
+            // Calculate average amplitude in this frequency range
+            float sum = 0.0f;
+            for (int j = startIdx; j <= endIdx; j++) {
+                sum += std::sqrt(out[j][0] * out[j][0] + out[j][1] * out[j][1]);
+            }
+            float avg = sum / (endIdx - startIdx + 1);
+            
+            // Normalize and apply some scaling for better visualization
+            float height = std::min(1.0f, avg / 50.0f);
+            
+            // Draw bar
+            float xLeft = -1.0f + i * barWidth;
+            float xRight = xLeft + barWidth * 0.8f; // Small gap between bars
+            
+            glBegin(GL_QUADS);
+            glVertex2f(xLeft, -1.0f);
+            glVertex2f(xRight, -1.0f);
+            glVertex2f(xRight, -1.0f + height * 2); // Scale to fill height
+            glVertex2f(xLeft, -1.0f + height * 2);
+            glEnd();
+        }
+    } else {
+        // Waveform visualization for live mode
+        glClear(GL_COLOR_BUFFER_BIT);
+        glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+        
+        glBegin(GL_LINE_STRIP);
+        
+        // Display a window of samples from the current position
+        size_t position = currentPosition.load();
+        int sampleCount = std::min(N, (int)audioData.size() - (int)position);
+        
+        for (int i = 0; i < sampleCount; i++) {
+            float x = -1.0f + 2.0f * i / (float)(sampleCount - 1);
+            float y = audioData[position + i] * 0.8f; // Scale to prevent clipping
+            glVertex2f(x, y);
+        }
+        
+        glEnd();
+    }
 }
 
 // Render a frame at the specified time
@@ -438,7 +544,7 @@ void encodeVideoFrame(int frameIndex) {
 }
 
 // Encode audio data corresponding to the specified frame
-void encodeAudioForFrame(int frameIndex, int totalFrames) {
+void encodeAudioForFrame(int frameIndex) {
     if (!recordVideo || !formatContext) return;
     
     // Get audio frame size from the context
@@ -466,7 +572,7 @@ void encodeAudioForFrame(int frameIndex, int totalFrames) {
         // Copy samples for the current frame
         for (int i = 0; i < frameSize; i++) {
             int64_t samplePos = pos + i;
-            if (samplePos < audioData.size()) {
+            if (samplePos < static_cast<int64_t>(audioData.size())) {
                 audioFrameData[i] = audioData[samplePos];
             } else {
                 audioFrameData[i] = 0.0f; // Pad with silence if needed
@@ -628,7 +734,7 @@ int main(int argc, char** argv) {
         }
     }
     
-    // Non-real-time rendering loop
+    // Non-real-time rendering loop for recording
     if (recordVideo) {
         std::cout << "Starting non-real-time rendering..." << std::endl;
         
@@ -645,7 +751,7 @@ int main(int argc, char** argv) {
             encodeVideoFrame(frameIndex);
             
             // Encode the corresponding audio segment
-            encodeAudioForFrame(frameIndex, totalFrames);
+            encodeAudioForFrame(frameIndex);
             
             // Update the window to show progress (but don't wait for vsync)
             glfwSwapBuffers(window);
@@ -672,27 +778,74 @@ int main(int argc, char** argv) {
         // Finalize video encoding
         finalizeVideoEncoder();
     } else {
-        // Interactive mode for visualization only - simple rendering loop
-        while (!glfwWindowShouldClose(window)) {
-            // For interactive mode, we'll just use a time counter
-            static float timeSeconds = 0.0f;
-            
-            // Render the visualization for the current time
-            renderFrameAtTime(timeSeconds);
-            
-            // Advance time (wrapping around if needed)
-            timeSeconds += 1.0f / FPS;
-            if (timeSeconds * SAMPLE_RATE >= audioData.size()) {
-                timeSeconds = 0.0f;
-            }
+        // Live playback mode with PortAudio
+        std::cout << "Starting live playback mode..." << std::endl;
+        
+        // Initialize PortAudio
+        PaError err = Pa_Initialize();
+        if (err != paNoError) {
+            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+            fftw_destroy_plan(plan);
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return -1;
+        }
+        
+        // Set up audio stream
+        PaStream* stream;
+        err = Pa_OpenDefaultStream(&stream,
+                                   0,          // No input channels
+                                   1,          // Mono output
+                                   paFloat32,  // 32-bit floating point output
+                                   SAMPLE_RATE,
+                                   FRAMES_PER_BUFFER,
+                                   paCallback,
+                                   NULL);
+        
+        if (err != paNoError) {
+            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+            Pa_Terminate();
+            fftw_destroy_plan(plan);
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return -1;
+        }
+        
+        // Start audio stream
+        err = Pa_StartStream(stream);
+        if (err != paNoError) {
+            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+            Pa_CloseStream(stream);
+            Pa_Terminate();
+            fftw_destroy_plan(plan);
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return -1;
+        }
+        
+        // Reset playback flag and position
+        playbackFinished = false;
+        currentPosition.store(0);
+        
+        // Live visualization loop
+        while (!glfwWindowShouldClose(window) && !playbackFinished) {
+            // Render the visualization based on current audio position
+            renderLiveVisualization();
             
             // Update the window
             glfwSwapBuffers(window);
             glfwPollEvents();
             
-            // Cap the frame rate
+            // Cap the frame rate to avoid excessive CPU usage
             std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(1000.0f / FPS)));
         }
+        
+        // Clean up PortAudio
+        if (stream) {
+            Pa_StopStream(stream);
+            Pa_CloseStream(stream);
+        }
+        Pa_Terminate();
     }
     
     // Clean up
