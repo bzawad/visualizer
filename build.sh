@@ -1,21 +1,31 @@
 #!/bin/bash
 
-# Get Homebrew prefix
+# Get Homebrew prefix location
 BREW_PREFIX=$(brew --prefix)
 
-# Set compiler flags
-CXX=g++
+# C++ compiler flags
 CXXFLAGS="-std=c++11 -Wall -Wextra -O2 -I${BREW_PREFIX}/include"
-LIBS="-L${BREW_PREFIX}/lib -lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio -lavcodec -lavformat -lavutil -lswscale"
 
-# Output binary name
-OUTPUT="visualizer"
+# Linker flags for required libraries
+LDFLAGS="-L${BREW_PREFIX}/lib -lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
+FFMPEG_LIBS="-lavcodec -lavformat -lavutil -lswscale"
 
-# Source file(s)
-SRC="visualizer.cpp"
+# Compile the visualizer components
+echo "Compiling bar_equalizer.cpp..."
+g++ $CXXFLAGS -c bar_equalizer.cpp -o bar_equalizer.o
 
-# Compile
-echo "Compiling $SRC..."
-$CXX $SRC -o $OUTPUT $CXXFLAGS $LIBS
+echo "Compiling waveform.cpp..."
+g++ $CXXFLAGS -c waveform.cpp -o waveform.o
 
-echo "Build complete. Run with: ./$OUTPUT"
+echo "Compiling visualizer_factory.cpp..."
+g++ $CXXFLAGS -c visualizer_factory.cpp -o visualizer_factory.o
+
+# Compile main file
+echo "Compiling visualizer.cpp..."
+g++ $CXXFLAGS -c visualizer.cpp -o visualizer.o
+
+# Link all object files
+echo "Linking..."
+g++ visualizer.o bar_equalizer.o waveform.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
+
+echo "Build complete. Run with: ./visualizer"

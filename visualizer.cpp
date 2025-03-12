@@ -12,6 +12,11 @@
 #include <atomic>
 #include <cstring> // For strcmp
 #include <chrono>  // For timing
+#include <memory>
+
+// Include our visualization components
+#include "visualizer_base.h"
+#include "visualizer_factory.h"
 
 // FFmpeg libraries
 extern "C" {
@@ -26,16 +31,12 @@ extern "C" {
 // Window dimensions
 const int WIDTH = 800, HEIGHT = 600;
 
-// Visualization type
-enum VisualizerType {
-    BAR_EQUALIZER,
-    WAVEFORM
-};
-VisualizerType currentVisualizer = BAR_EQUALIZER; // Default
+// Current visualizer type
+VisualizerType currentVisualizerType = BAR_EQUALIZER; // Default
+std::shared_ptr<Visualizer> currentVisualizer;
 
 // FFT Settings
 const int N = 1024;         // Number of samples (must be power of 2)
-const int NUM_BARS = 16;    // Number of frequency bars to display
 double in[N];               // Input signal
 fftw_complex out[N];        // FFT output
 fftw_plan plan;             // FFTW plan
@@ -113,84 +114,16 @@ static int paCallback(const void* inputBuffer, void* outputBuffer,
     return playbackFinished ? paComplete : paContinue;
 }
 
-// OpenGL rendering function for bar visualization
-void renderFFT(float timeSeconds) {
-    // Clear is now handled by renderFrameAtTime
-    glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+// Render a frame at the specified time
+void renderFrameAtTime(float timeSeconds) {
+    // The OpenGL state (viewport, matrices) is now set by the caller
+    glClear(GL_COLOR_BUFFER_BIT);
     
-    // Calculate the sample index for the current time
-    size_t sampleIndex = static_cast<size_t>(timeSeconds * SAMPLE_RATE);
-    if (sampleIndex >= audioData.size()) return;
-    
-    // Fill the FFT input buffer with samples at this time
-    for (int i = 0; i < N; i++) {
-        if (sampleIndex + i < audioData.size()) {
-            in[i] = audioData[sampleIndex + i];
-        } else {
-            in[i] = 0.0;
-        }
-    }
-    
-    // Execute FFT
-    fftw_execute(plan);
-    
-    // Calculate frequency bands for 16 bars
-    float barWidth = 2.0f / NUM_BARS; // normalized width in [-1, 1] space
-    
-    for (int i = 0; i < NUM_BARS; i++) {
-        // Map bar index to frequency range (logarithmic scale for better visual)
-        int startIdx = (int)(pow(N/2, (float)i / NUM_BARS) - 1);
-        int endIdx = (int)(pow(N/2, (float)(i+1) / NUM_BARS) - 1);
-        startIdx = std::max(0, startIdx);
-        endIdx = std::min(N/2 - 1, endIdx);
-        
-        // Calculate average amplitude in this frequency range
-        float sum = 0.0f;
-        for (int j = startIdx; j <= endIdx; j++) {
-            sum += std::sqrt(out[j][0] * out[j][0] + out[j][1] * out[j][1]);
-        }
-        float avg = sum / (endIdx - startIdx + 1);
-        
-        // Normalize and apply some scaling for better visualization
-        float height = std::min(1.0f, avg / 50.0f);
-        
-        // Draw bar
-        float xLeft = -1.0f + i * barWidth;
-        float xRight = xLeft + barWidth * 0.8f; // Small gap between bars
-        
-        glBegin(GL_QUADS);
-        glVertex2f(xLeft, -1.0f);
-        glVertex2f(xRight, -1.0f);
-        glVertex2f(xRight, -1.0f + height * 2); // Scale to fill height
-        glVertex2f(xLeft, -1.0f + height * 2);
-        glEnd();
-    }
+    // Use the current visualizer to render the frame
+    currentVisualizer->renderFrame(audioData, in, out, plan, timeSeconds);
 }
 
-// OpenGL rendering function for waveform visualization
-void renderWaveform(float timeSeconds) {
-    // Clear is now handled by renderFrameAtTime
-    glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
-    
-    // Calculate the sample index for the current time
-    size_t sampleIndex = static_cast<size_t>(timeSeconds * SAMPLE_RATE);
-    if (sampleIndex >= audioData.size()) return;
-    
-    glBegin(GL_LINE_STRIP);
-    
-    // Display a window of samples from the current position
-    int sampleCount = std::min(N, (int)audioData.size() - (int)sampleIndex);
-    
-    for (int i = 0; i < sampleCount; i++) {
-        float x = -1.0f + 2.0f * i / (float)(sampleCount - 1);
-        float y = audioData[sampleIndex + i] * 0.8f; // Scale to prevent clipping
-        glVertex2f(x, y);
-    }
-    
-    glEnd();
-}
-
-// OpenGL rendering function for live mode (using PortAudio position)
+// OpenGL rendering function for live mode
 void renderLiveVisualization() {
     // Apply the same consistent viewport and matrix settings 
     glClear(GL_COLOR_BUFFER_BIT);
@@ -200,74 +133,8 @@ void renderLiveVisualization() {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     
-    if (currentVisualizer == BAR_EQUALIZER) {
-        // For live mode, just execute FFT on current buffer without timeSeconds
-        glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
-        
-        // Execute FFT
-        fftw_execute(plan);
-        
-        // Calculate frequency bands for 16 bars
-        float barWidth = 2.0f / NUM_BARS; // normalized width in [-1, 1] space
-        
-        for (int i = 0; i < NUM_BARS; i++) {
-            // Map bar index to frequency range (logarithmic scale for better visual)
-            int startIdx = (int)(pow(N/2, (float)i / NUM_BARS) - 1);
-            int endIdx = (int)(pow(N/2, (float)(i+1) / NUM_BARS) - 1);
-            startIdx = std::max(0, startIdx);
-            endIdx = std::min(N/2 - 1, endIdx);
-            
-            // Calculate average amplitude in this frequency range
-            float sum = 0.0f;
-            for (int j = startIdx; j <= endIdx; j++) {
-                sum += std::sqrt(out[j][0] * out[j][0] + out[j][1] * out[j][1]);
-            }
-            float avg = sum / (endIdx - startIdx + 1);
-            
-            // Normalize and apply some scaling for better visualization
-            float height = std::min(1.0f, avg / 50.0f);
-            
-            // Draw bar
-            float xLeft = -1.0f + i * barWidth;
-            float xRight = xLeft + barWidth * 0.8f; // Small gap between bars
-            
-            glBegin(GL_QUADS);
-            glVertex2f(xLeft, -1.0f);
-            glVertex2f(xRight, -1.0f);
-            glVertex2f(xRight, -1.0f + height * 2); // Scale to fill height
-            glVertex2f(xLeft, -1.0f + height * 2);
-            glEnd();
-        }
-    } else {
-        // Waveform visualization for live mode
-        glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
-        
-        glBegin(GL_LINE_STRIP);
-        
-        // Display a window of samples from the current position
-        size_t position = currentPosition.load();
-        int sampleCount = std::min(N, (int)audioData.size() - (int)position);
-        
-        for (int i = 0; i < sampleCount; i++) {
-            float x = -1.0f + 2.0f * i / (float)(sampleCount - 1);
-            float y = audioData[position + i] * 0.8f; // Scale to prevent clipping
-            glVertex2f(x, y);
-        }
-        
-        glEnd();
-    }
-}
-
-// Render a frame at the specified time
-void renderFrameAtTime(float timeSeconds) {
-    // The OpenGL state (viewport, matrices) is now set by the caller
-    glClear(GL_COLOR_BUFFER_BIT);
-    
-    if (currentVisualizer == BAR_EQUALIZER) {
-        renderFFT(timeSeconds);
-    } else {
-        renderWaveform(timeSeconds);
-    }
+    // Use the current visualizer to render the live frame
+    currentVisualizer->renderLiveFrame(audioData, in, out, plan, currentPosition.load());
 }
 
 // Initialize video encoder
@@ -674,14 +541,35 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+    // Toggle visualization type
+    else if (key == GLFW_KEY_V && action == GLFW_PRESS) {
+        // Cycle through visualization types
+        if (currentVisualizerType == BAR_EQUALIZER) {
+            currentVisualizerType = WAVEFORM;
+        } else {
+            currentVisualizerType = BAR_EQUALIZER;
+        }
+        
+        // Create the new visualizer
+        currentVisualizer = VisualizerFactory::createVisualizer(currentVisualizerType);
+        
+        std::cout << "Switched to " << VisualizerFactory::getVisualizerName(currentVisualizerType) << " visualization" << std::endl;
+    }
 }
 
 // Window resize callback to handle viewport changes
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
-    (void)window; // Unused parameter
+    // Mark unused parameter to silence compiler warning
+    (void)window;
     
-    // Update viewport to match new window size
-    glViewport(0, 0, width, height);
+    // If we're in recording mode, we should maintain the WIDTH x HEIGHT viewport
+    // regardless of the actual window size to ensure consistent rendering
+    if (recordVideo) {
+        glViewport(0, 0, WIDTH, HEIGHT);
+    } else {
+        // For live playback, adapt to the actual window size
+        glViewport(0, 0, width, height);
+    }
     
     // Reset the projection matrix
     glMatrixMode(GL_PROJECTION);
@@ -691,24 +579,22 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     // Switch back to modelview matrix
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    
+    // Update the visualizer's dimensions
+    if (currentVisualizer) {
+        currentVisualizer->initialize(width, height);
+    }
 }
 
 // Main function
 int main(int argc, char** argv) {
     std::string wavFile;
+    std::string visualizerTypeName = "bars"; // Default
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
-            if (strcmp(argv[i + 1], "waveform") == 0) {
-                currentVisualizer = WAVEFORM;
-            } else if (strcmp(argv[i + 1], "bars") == 0) {
-                currentVisualizer = BAR_EQUALIZER;
-            } else {
-                std::cerr << "Unknown visualizer type: " << argv[i + 1] << std::endl;
-                std::cerr << "Supported types: bars, waveform" << std::endl;
-                return -1;
-            }
+            visualizerTypeName = argv[i + 1];
             i++; // Skip the next argument
         } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
             recordVideo = true;
@@ -723,6 +609,18 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: " << argv[0] << " [--type bars|waveform] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
+    
+    // Create the visualizer
+    currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
+    
+    // Get the visualizer type from the name
+    if (visualizerTypeName == "waveform") {
+        currentVisualizerType = WAVEFORM;
+    } else {
+        currentVisualizerType = BAR_EQUALIZER;
+    }
+    
+    std::cout << "Using " << VisualizerFactory::getVisualizerName(currentVisualizerType) << " visualization" << std::endl;
     
     // Load WAV file
     if (!loadWavFile(wavFile)) {
@@ -743,9 +641,16 @@ int main(int argc, char** argv) {
     // Set window hints for a better default configuration
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    
+    // Make window non-resizable when in recording mode to ensure consistent rendering
+    if (recordVideo) {
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        std::cout << "Fixed window size for recording mode" << std::endl;
+    } else {
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    }
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Music Visualizer", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
     if (!window) {
         std::cerr << "Failed to create window\n";
         glfwTerminate();
@@ -778,7 +683,25 @@ int main(int argc, char** argv) {
     // Set OpenGL viewport explicitly
     int fbWidth, fbHeight;
     glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
-    glViewport(0, 0, fbWidth, fbHeight);
+    
+    // Get the window size for comparison with framebuffer size (for HiDPI detection)
+    int winWidth, winHeight;
+    glfwGetWindowSize(window, &winWidth, &winHeight);
+    
+    // Check if we're on a HiDPI display
+    float scaleX = (float)fbWidth / winWidth;
+    float scaleY = (float)fbHeight / winHeight;
+    
+    if (scaleX > 1.0f || scaleY > 1.0f) {
+        std::cout << "HiDPI display detected (scale: " << scaleX << "x" << scaleY << ")" << std::endl;
+    }
+    
+    // For recording, always use the exact dimensions regardless of actual framebuffer
+    if (recordVideo) {
+        glViewport(0, 0, WIDTH, HEIGHT);
+    } else {
+        glViewport(0, 0, fbWidth, fbHeight);
+    }
     
     // Set up projection matrix
     glMatrixMode(GL_PROJECTION);
@@ -791,6 +714,9 @@ int main(int argc, char** argv) {
     
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    
+    // Initialize the visualizer
+    currentVisualizer->initialize(WIDTH, HEIGHT);
     
     // Initialize video encoder if recording
     if (recordVideo) {
