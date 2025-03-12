@@ -4,6 +4,9 @@
 
 BarEqualizer::BarEqualizer(int numBars) : numBars(numBars)
 {
+    // Initialize peak tracking vectors
+    peakHeights.resize(numBars, 0.0f);
+    peakDecay.resize(numBars, 0.0f);
 }
 
 BarEqualizer::~BarEqualizer()
@@ -16,9 +19,6 @@ void BarEqualizer::renderFrame(const std::vector<float> &audioData,
                                fftw_plan &fftPlan,
                                float timeSeconds)
 {
-    // Set color for visualization
-    glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
-
     // Calculate the sample index for the current time
     size_t sampleIndex = static_cast<size_t>(timeSeconds * 44100); // Assuming 44.1kHz
     if (sampleIndex >= audioData.size())
@@ -54,12 +54,6 @@ void BarEqualizer::renderLiveFrame(const std::vector<float> &audioData,
     (void)audioData;
     (void)fftInputBuffer;
     (void)currentPosition;
-
-    // The FFT input buffer should already be updated by the audio callback
-    // We just need to execute the FFT and render
-
-    // Set color for visualization
-    glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
 
     // Execute FFT
     fftw_execute(fftPlan);
@@ -100,30 +94,70 @@ void BarEqualizer::renderBars(fftw_complex *fftOutputBuffer)
             float magnitude = std::sqrt(fftOutputBuffer[j][0] * fftOutputBuffer[j][0] +
                                         fftOutputBuffer[j][1] * fftOutputBuffer[j][1]);
 
-            // Apply frequency-dependent scaling
-            float freqScaling = std::pow(static_cast<float>(j) / startIdx, 0.5f); // Square root scaling
+            // Apply gentler frequency-dependent scaling
+            float freqScaling = std::pow(static_cast<float>(j) / (startIdx + 1), 0.3f);
             magnitude *= freqScaling;
 
             sum += magnitude;
         }
         float avg = sum / (endIdx - startIdx + 1);
 
-        // Apply additional scaling based on frequency band
-        float bandScaling = 1.0f + (static_cast<float>(i) / numBars) * 2.0f; // Linear scaling with frequency
+        // Apply more balanced frequency band scaling
+        float bandScaling = 1.0f + (static_cast<float>(i) / numBars);
         avg *= bandScaling;
 
-        // Normalize and apply some scaling for better visualization
-        float height = std::min(1.0f, avg / 25.0f); // Adjusted base scaling
+        // Normalize with increased divisor for lower frequencies
+        float scalingFactor;
+        if (i < numBars / 3)
+        {                          // Low frequencies
+            scalingFactor = 50.0f; // Increased from 25.0f for low frequencies
+        }
+        else if (i < 2 * numBars / 3)
+        { // Mid frequencies
+            scalingFactor = 35.0f;
+        }
+        else
+        { // High frequencies
+            scalingFactor = 25.0f;
+        }
+
+        float height = std::min(1.0f, avg / scalingFactor);
 
         // Draw bar
         float xLeft = -1.0f + i * barWidth;
         float xRight = xLeft + barWidth * 0.8f; // Small gap between bars
 
+        // Draw the main bar in green
+        glColor3f(0.0f, 1.0f, 0.0f);
         glBegin(GL_QUADS);
         glVertex2f(xLeft, -1.0f);
         glVertex2f(xRight, -1.0f);
-        glVertex2f(xRight, -1.0f + height * 2); // Scale to fill height
+        glVertex2f(xRight, -1.0f + height * 2);
         glVertex2f(xLeft, -1.0f + height * 2);
         glEnd();
+
+        // Update peak (using the actual height, not scaled)
+        float targetPeakHeight = height; // Removed PEAK_HEIGHT scaling
+        if (targetPeakHeight > peakHeights[i])
+        {
+            peakHeights[i] = targetPeakHeight;
+            peakDecay[i] = 0.0f;
+        }
+        else
+        {
+            peakDecay[i] += PEAK_DECAY_RATE;
+            peakHeights[i] = std::max(targetPeakHeight,
+                                      peakHeights[i] - peakDecay[i] * peakDecay[i]);
+        }
+
+        // Draw thicker peak line in red
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glLineWidth(3.0f); // Set line thickness to 3 pixels
+        glBegin(GL_LINES);
+        float peakY = -1.0f + peakHeights[i] * 2;
+        glVertex2f(xLeft, peakY);
+        glVertex2f(xRight, peakY);
+        glEnd();
+        glLineWidth(1.0f); // Reset line width to default
     }
 }
