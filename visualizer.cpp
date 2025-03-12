@@ -10,9 +10,17 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <cstring> // For strcmp
 
 // Window dimensions
 const int WIDTH = 800, HEIGHT = 600;
+
+// Visualization type
+enum VisualizerType {
+    BAR_EQUALIZER,
+    WAVEFORM
+};
+VisualizerType currentVisualizer = BAR_EQUALIZER; // Default
 
 // FFT Settings
 const int N = 1024;         // Number of samples (must be power of 2)
@@ -32,6 +40,7 @@ std::mutex audioMutex;
 // Forward declarations
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 bool loadWavFile(const std::string& filename);
+void renderWaveform();
 
 // Audio callback function for PortAudio
 static int paCallback(const void* inputBuffer, void* outputBuffer,
@@ -113,6 +122,26 @@ void renderFFT() {
     }
 }
 
+// OpenGL rendering function for waveform visualization
+void renderWaveform() {
+    glClear(GL_COLOR_BUFFER_BIT);
+    glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
+    
+    glBegin(GL_LINE_STRIP);
+    
+    // Display a window of samples from the current position
+    size_t position = currentPosition.load();
+    int sampleCount = std::min(N, (int)audioData.size() - (int)position);
+    
+    for (int i = 0; i < sampleCount; i++) {
+        float x = -1.0f + 2.0f * i / (float)(sampleCount - 1);
+        float y = audioData[position + i] * 0.8f; // Scale to prevent clipping
+        glVertex2f(x, y);
+    }
+    
+    glEnd();
+}
+
 // Load WAV file using libsndfile
 bool loadWavFile(const std::string& filename) {
     SF_INFO sfInfo;
@@ -159,8 +188,28 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 // Main loop
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <wav_file>" << std::endl;
+    std::string wavFile;
+    
+    // Parse command line arguments
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
+            if (strcmp(argv[i + 1], "waveform") == 0) {
+                currentVisualizer = WAVEFORM;
+            } else if (strcmp(argv[i + 1], "bars") == 0) {
+                currentVisualizer = BAR_EQUALIZER;
+            } else {
+                std::cerr << "Unknown visualizer type: " << argv[i + 1] << std::endl;
+                std::cerr << "Supported types: bars, waveform" << std::endl;
+                return -1;
+            }
+            i++; // Skip the next argument
+        } else {
+            wavFile = argv[i];
+        }
+    }
+    
+    if (wavFile.empty()) {
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform] <wav_file>" << std::endl;
         return -1;
     }
     
@@ -172,7 +221,7 @@ int main(int argc, char** argv) {
     }
     
     // Load WAV file
-    if (!loadWavFile(argv[1])) {
+    if (!loadWavFile(wavFile)) {
         Pa_Terminate();
         return -1;
     }
@@ -240,7 +289,13 @@ int main(int argc, char** argv) {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
-        renderFFT(); // Render visualization
+        // Render the selected visualization
+        if (currentVisualizer == BAR_EQUALIZER) {
+            renderFFT();
+        } else if (currentVisualizer == WAVEFORM) {
+            renderWaveform();
+        }
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
         

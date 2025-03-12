@@ -1,11 +1,13 @@
 # Music Visualizer
 
-A simple music visualizer that plays a WAV file and displays a 16-bar frequency meter in green.
+A simple music visualizer that plays a WAV file and displays a frequency or waveform visualization in green.
 
 ## Features
 
 - Play mono WAV files
-- Visualize frequencies in 16 green bars
+- Multiple visualization types:
+  - Frequency bars (16 green bars)
+  - Waveform display
 - Press Escape to exit the visualizer
 
 ## Requirements
@@ -35,13 +37,20 @@ chmod +x build.sh
 ## Usage
 
 ```bash
-./visualizer [wav_file]
+./visualizer [--type bars|waveform] <wav_file>
 ```
 
-For example:
+Examples:
 
 ```bash
+# Default visualization (frequency bars)
 ./visualizer sample.wav
+
+# Waveform visualization
+./visualizer --type waveform sample.wav 
+
+# Explicitly select bar equalizer
+./visualizer --type bars sample.wav
 ```
 
 ## Creating Test Files
