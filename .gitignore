@@ -22,4 +22,8 @@ cmake_install.cmake
 *.swo
 *.DS_Store
 *.mp4
+*.wav
 visualizer
+
+!mono_tone.wav
+!music.wav
