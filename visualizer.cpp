@@ -698,6 +698,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = SPECTROGRAM;
             break;
         case SPECTROGRAM:
+            currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
+            break;
+        case MULTI_BAND_CIRCLE_WAVEFORM:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -771,7 +774,7 @@ int main(int argc, char **argv)
 
     if (wavFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram] [--record output.mp4] <wav_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram|circle] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
 
@@ -794,6 +797,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
     {
         currentVisualizerType = SPECTROGRAM;
+    }
+    else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
+    {
+        currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
     }
     else
     {

@@ -4,6 +4,7 @@
 #include "multi_band_waveform.h"
 #include "ascii_bar_equalizer.h"
 #include "spectrogram.h"
+#include "multi_band_circle_waveform.h"
 #include <algorithm>
 #include <cctype>
 
@@ -21,6 +22,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<AsciiBarEqualizer>();
     case SPECTROGRAM:
         return std::make_shared<Spectrogram>();
+    case MULTI_BAND_CIRCLE_WAVEFORM:
+        return std::make_shared<MultiBandCircleWaveform>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -54,6 +57,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(SPECTROGRAM);
     }
+    else if (lowerName == "circle" || lowerName == "circles" || lowerName == "multi_band_circle")
+    {
+        return createVisualizer(MULTI_BAND_CIRCLE_WAVEFORM);
+    }
     else
     {
         // Default to bar equalizer
@@ -75,6 +82,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "ASCII Bar Equalizer";
     case SPECTROGRAM:
         return "Spectrogram";
+    case MULTI_BAND_CIRCLE_WAVEFORM:
+        return "Multi-Band Circle Waveform";
     default:
         return "Unknown";
     }

@@ -11,7 +11,8 @@ enum VisualizerType
     WAVEFORM,
     MULTI_BAND_WAVEFORM,
     ASCII_BAR_EQUALIZER,
-    SPECTROGRAM
+    SPECTROGRAM,
+    MULTI_BAND_CIRCLE_WAVEFORM
 };
 
 class VisualizerFactory
