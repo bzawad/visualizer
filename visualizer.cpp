@@ -40,8 +40,13 @@ static int paCallback(const void* inputBuffer, void* outputBuffer,
                      PaStreamCallbackFlags statusFlags,
                      void* userData) {
     
+    // Mark unused parameters to silence compiler warnings
+    (void)inputBuffer;  // Already marked as unused
+    (void)timeInfo;     // Mark as unused
+    (void)statusFlags;  // Mark as unused
+    (void)userData;     // Mark as unused
+    
     float* out = (float*)outputBuffer;
-    (void)inputBuffer; // Unused parameter
     
     size_t position = currentPosition.load();
     
@@ -143,6 +148,10 @@ bool loadWavFile(const std::string& filename) {
 
 // Key callback function
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    // Mark unused parameters to silence compiler warnings
+    (void)scancode;  // Mark as unused
+    (void)mods;      // Mark as unused
+    
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
