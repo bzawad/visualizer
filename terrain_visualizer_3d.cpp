@@ -122,21 +122,21 @@ void TerrainVisualizer3D::setupPerspectiveView()
     // Calculate the aspect ratio for proper perspective
     float aspect = static_cast<float>(screenWidth) / screenHeight;
     
-    // Set up perspective projection (FOV: 45 degrees)
-    gluPerspective(45.0f, aspect, 0.1f, 100.0f);
+    // Set up perspective projection with wider FOV for more perspective effect
+    gluPerspective(65.0f, aspect, 0.1f, 100.0f);
     
     // Set up modelview matrix
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     
-    // Position the "camera" to look at the terrain from a good viewing angle
-    // Eye position higher and slightly behind, looking down on the terrain
-    gluLookAt(0.0f, 2.5f, 2.0f,  // Eye position
-              0.0f, 0.0f, -2.0f, // Look-at position
-              0.0f, 1.0f, 0.0f); // Up vector
+    // Position the "camera" to look at the terrain from a more elevated angle
+    // Adjusted to make the terrain fill more vertical space
+    gluLookAt(0.0f, 6.0f, 7.0f,     // Eye position (slightly further back)
+              0.0f, 2.0f, -4.0f,    // Look-at position (raised more)
+              0.0f, 1.0f, 0.0f);    // Up vector
               
-    // Add a slight rotation for a better view angle
-    glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
+    // Adjust rotation angle to show more vertical terrain
+    glRotatef(35.0f, 1.0f, 0.0f, 0.0f);
 }
 
 void TerrainVisualizer3D::updateFFT(const std::vector<float> &audioData, double *fftInputBuffer, fftw_plan &fftPlan, size_t position)
@@ -163,29 +163,27 @@ void TerrainVisualizer3D::analyzeBands(fftw_complex *fftOutput)
     // Calculate frequency resolution
     const float freqResolution = 44100.0f / 1024.0f; // Sample rate / FFT size
     
-    // Get bin ranges for each band
-    const int lowStartBin = 0;
-    const int lowEndBin = static_cast<int>(LOW_CUTOFF / freqResolution);
-    const int midStartBin = lowEndBin;
-    const int midEndBin = static_cast<int>(MID_CUTOFF / freqResolution);
-    const int highStartBin = midEndBin;
-    const int highEndBin = static_cast<int>(HIGH_CUTOFF / freqResolution);
+    // Define the cutoff frequencies for the 5 bands
+    const int cutoffs[NUM_BANDS + 1] = {
+        0,                // Start of lowest band
+        LOWEST_CUTOFF,    // End of lowest band / Start of low-mid band
+        LOW_MID_CUTOFF,   // End of low-mid band / Start of mid band
+        MID_CUTOFF,       // End of mid band / Start of mid-high band
+        MID_HIGH_CUTOFF,  // End of mid-high band / Start of high band
+        HIGH_CUTOFF       // End of high band
+    };
     
     // Ensure bins are within the FFT range
     const int maxBin = 512; // N/2 for real signals
     
     // Bin ranges for each band
-    const std::array<int, 3> startBins = {
-        std::max(0, lowStartBin),
-        std::max(0, midStartBin),
-        std::max(0, highStartBin)
-    };
+    std::array<int, NUM_BANDS> startBins;
+    std::array<int, NUM_BANDS> endBins;
     
-    const std::array<int, 3> endBins = {
-        std::min(maxBin, lowEndBin),
-        std::min(maxBin, midEndBin),
-        std::min(maxBin, highEndBin)
-    };
+    for (int band = 0; band < NUM_BANDS; band++) {
+        startBins[band] = std::max(0, static_cast<int>(cutoffs[band] / freqResolution));
+        endBins[band] = std::min(maxBin, static_cast<int>(cutoffs[band + 1] / freqResolution));
+    }
     
     // Process each band
     for (int band = 0; band < NUM_BANDS; band++) {
@@ -202,12 +200,26 @@ void TerrainVisualizer3D::analyzeBands(fftw_complex *fftOutput)
             
             // Apply logarithmic scaling for better visualization
             magnitude = magnitude > 0 ? std::log10(1 + magnitude) : 0;
+            
+            // Apply frequency-dependent scaling (similar to bar_equalizer.cpp)
+            // Higher frequencies get more emphasis
+            if (startBins[band] > 0) { // Avoid division by zero
+                float freqScaling = std::pow(static_cast<float>(bin) / startBins[band], 0.5f);
+                magnitude *= freqScaling;
+            }
+            
             rawMagnitudes.push_back(magnitude);
         }
         
+        // Calculate band-specific scaling (similar to bar_equalizer.cpp)
+        // This gives more emphasis to higher frequency bands
+        float bandScaling = 1.0f + (static_cast<float>(band) / NUM_BANDS) * 1.5f;
+        
         // Find maximum for normalization
         float maxMagnitude = 0.0f;
-        for (float mag : rawMagnitudes) {
+        for (float &mag : rawMagnitudes) {
+            // Apply band scaling to each magnitude
+            mag *= bandScaling;
             maxMagnitude = std::max(maxMagnitude, mag);
         }
         
@@ -236,11 +248,27 @@ void TerrainVisualizer3D::analyzeBands(fftw_complex *fftOutput)
 
 void TerrainVisualizer3D::renderTerrain()
 {
-    // Position bands with low frequencies in back, high frequencies in front
+    // Z-spacing between bands (increased for more depth)
+    const float Z_SPACING = 2.0f;
+    
+    // Position bands with more depth and spacing
+    // Low frequencies in back, high frequencies in front
     const float zPositions[NUM_BANDS] = {
-        -2.0f,  // Low
-        -1.0f,  // Mid
-        0.0f    // High
+        -4.0f * Z_SPACING,  // Lowest (furthest back)
+        -3.0f * Z_SPACING,  // Low-Mid
+        -2.0f * Z_SPACING,  // Mid
+        -1.0f * Z_SPACING,  // Mid-High
+        0.0f                // Highest (front)
+    };
+    
+    // Vary width by band - front is full width, back is 1/6 width
+    // Adjusted to make more extreme differences between front and back
+    const float widthScales[NUM_BANDS] = {
+        0.17f,  // Lowest (narrowest)
+        0.3f,   // Low-Mid
+        0.5f,   // Mid
+        0.75f,  // Mid-High
+        1.0f    // Highest (full width)
     };
     
     // Draw reference grid
@@ -249,16 +277,29 @@ void TerrainVisualizer3D::renderTerrain()
     
     // Horizontal grid lines at ground level
     glBegin(GL_LINES);
-    for (int z = 0; z < NUM_BANDS; z++) {
-        glVertex3f(-TERRAIN_WIDTH/2, 0.0f, zPositions[z]);
-        glVertex3f(TERRAIN_WIDTH/2, 0.0f, zPositions[z]);
+    for (int band = 0; band < NUM_BANDS; band++) {
+        float z = zPositions[band];
+        float width = TERRAIN_WIDTH * widthScales[band];
+        glVertex3f(-width/2, 0.0f, z);
+        glVertex3f(width/2, 0.0f, z);
     }
     
     // Side grid lines
-    for (int x = 0; x <= 10; x++) {
-        float xPos = -TERRAIN_WIDTH/2 + x * (TERRAIN_WIDTH / 10);
-        glVertex3f(xPos, 0.0f, zPositions[0]);  // Back line
-        glVertex3f(xPos, 0.0f, zPositions[NUM_BANDS-1]); // Front line
+    const int numGridLines = 15; // Increased for more detail with wider terrain
+    for (int band = 0; band < NUM_BANDS - 1; band++) {
+        float z1 = zPositions[band];
+        float z2 = zPositions[band + 1];
+        float width1 = TERRAIN_WIDTH * widthScales[band];
+        float width2 = TERRAIN_WIDTH * widthScales[band + 1];
+        
+        for (int i = 0; i <= numGridLines; i++) {
+            float t = static_cast<float>(i) / numGridLines;
+            float x1 = -width1/2 + t * width1;
+            float x2 = -width2/2 + t * width2;
+            
+            glVertex3f(x1, 0.0f, z1);
+            glVertex3f(x2, 0.0f, z2);
+        }
     }
     glEnd();
     
@@ -266,56 +307,40 @@ void TerrainVisualizer3D::renderTerrain()
     glLineWidth(LINE_WIDTH);
     glColor3fv(BAND_COLOR);
     
-    // Draw each band's waveform
+    // Draw each band's waveform with varying width
     for (int band = 0; band < NUM_BANDS; band++) {
         float z = zPositions[band];
+        float width = TERRAIN_WIDTH * widthScales[band];
         
         // Draw the waveform line
         glBegin(GL_LINE_STRIP);
         for (int i = 0; i < POINTS_PER_BAND; i++) {
-            float x = -TERRAIN_WIDTH/2 + i * (TERRAIN_WIDTH / (POINTS_PER_BAND - 1));
+            float x = -width/2 + i * (width / (POINTS_PER_BAND - 1));
             float y = bandData[band][i] * TERRAIN_HEIGHT;
             glVertex3f(x, y, z);
         }
         glEnd();
-        
-        // If not the last band, draw connection lines to the next band
-        if (band < NUM_BANDS - 1) {
-            float nextZ = zPositions[band + 1];
-            
-            // Draw connection lines every 20 points
-            glBegin(GL_LINES);
-            for (int i = 0; i < POINTS_PER_BAND; i += 20) {
-                float x = -TERRAIN_WIDTH/2 + i * (TERRAIN_WIDTH / (POINTS_PER_BAND - 1));
-                float y1 = bandData[band][i] * TERRAIN_HEIGHT;
-                float y2 = bandData[band + 1][i] * TERRAIN_HEIGHT;
-                
-                // Draw line connecting the two bands
-                glVertex3f(x, y1, z);
-                glVertex3f(x, y2, nextZ);
-            }
-            glEnd();
-        }
     }
     
-    // Draw the terrain mesh between bands
+    // Draw vertical connector lines between bands
     for (int band = 0; band < NUM_BANDS - 1; band++) {
         float z1 = zPositions[band];
         float z2 = zPositions[band + 1];
+        float width1 = TERRAIN_WIDTH * widthScales[band];
+        float width2 = TERRAIN_WIDTH * widthScales[band + 1];
         
-        // Draw triangles to fill the space between bands
-        glBegin(GL_TRIANGLE_STRIP);
-        for (int i = 0; i < POINTS_PER_BAND; i += 2) { // Skip some points for less density
-            float x = -TERRAIN_WIDTH/2 + i * (TERRAIN_WIDTH / (POINTS_PER_BAND - 1));
+        // Draw connection lines every 20 points
+        glBegin(GL_LINES);
+        for (int i = 0; i < POINTS_PER_BAND; i += 20) {
+            float t = static_cast<float>(i) / (POINTS_PER_BAND - 1);
+            float x1 = -width1/2 + t * width1;
+            float x2 = -width2/2 + t * width2;
             float y1 = bandData[band][i] * TERRAIN_HEIGHT;
             float y2 = bandData[band + 1][i] * TERRAIN_HEIGHT;
             
-            // First set the color to a darker green for the mesh
-            glColor3f(0.0f, 0.3f, 0.1f);
-            
-            // Draw two vertices - one from each band
-            glVertex3f(x, y1, z1);
-            glVertex3f(x, y2, z2);
+            // Draw line connecting the two bands
+            glVertex3f(x1, y1, z1);
+            glVertex3f(x2, y2, z2);
         }
         glEnd();
     }
