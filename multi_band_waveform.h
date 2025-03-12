@@ -2,6 +2,7 @@
 #define MULTI_BAND_WAVEFORM_H
 
 #include "visualizer_base.h"
+#include <vector>
 
 class MultiBandWaveform : public Visualizer
 {
@@ -29,15 +30,15 @@ private:
     // Helper method to filter audio data into frequency bands
     std::vector<float> filterBand(fftw_complex *fftOutput, int startBin, int endBin);
 
-    const int N = 1024;            // FFT size
-    const int LOW_CUTOFF = 200;    // Hz
-    const int MID_CUTOFF = 2000;   // Hz
-    const int HIGH_CUTOFF = 20000; // Hz
+    const int N = 1024;                       // FFT size
+    static constexpr int LOW_CUTOFF = 250;    // 20-250 Hz
+    static constexpr int MID_CUTOFF = 2000;   // 250-2000 Hz
+    static constexpr int HIGH_CUTOFF = 20000; // 2000-20000 Hz
 
     // Colors for each band
-    const float LOW_COLOR[3] = {0.0f, 0.0f, 1.0f};  // Blue
-    const float MID_COLOR[3] = {0.0f, 1.0f, 0.0f};  // Green
-    const float HIGH_COLOR[3] = {1.0f, 0.0f, 0.0f}; // Red
+    static constexpr float LOW_COLOR[3] = {1.0f, 0.0f, 0.0f};  // Red
+    static constexpr float MID_COLOR[3] = {0.0f, 1.0f, 0.0f};  // Green
+    static constexpr float HIGH_COLOR[3] = {0.0f, 0.0f, 1.0f}; // Blue
 };
 
 #endif // MULTI_BAND_WAVEFORM_H
