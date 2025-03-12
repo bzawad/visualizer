@@ -6,7 +6,7 @@ BREW_PREFIX=$(brew --prefix)
 # Set compiler flags
 CXX=g++
 CXXFLAGS="-Wall -Wextra -O2 -I${BREW_PREFIX}/include"
-LIBS="-L${BREW_PREFIX}/lib -lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
+LIBS="-L${BREW_PREFIX}/lib -lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio -lavcodec -lavformat -lavutil -lswscale"
 
 # Output binary name
 OUTPUT="visualizer"

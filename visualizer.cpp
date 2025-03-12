@@ -12,6 +12,15 @@
 #include <atomic>
 #include <cstring> // For strcmp
 
+// FFmpeg libraries
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
+#include <libswscale/swscale.h>
+}
+
 // Window dimensions
 const int WIDTH = 800, HEIGHT = 600;
 
@@ -37,10 +46,27 @@ std::atomic<bool> playbackFinished(false);
 std::atomic<size_t> currentPosition(0);
 std::mutex audioMutex;
 
+// Video recording settings
+bool recordVideo = false;
+std::string outputVideoFile;
+const int FPS = 30;
+AVFormatContext* formatContext = nullptr;
+AVCodecContext* codecContext = nullptr;
+AVStream* videoStream = nullptr;
+SwsContext* swsContext = nullptr;
+AVFrame* frame = nullptr;
+AVFrame* rgbFrame = nullptr;
+AVPacket* packet = nullptr;
+int frameCount = 0;
+std::vector<uint8_t> frameBuffer;
+
 // Forward declarations
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 bool loadWavFile(const std::string& filename);
 void renderWaveform();
+bool initializeVideoEncoder();
+void finalizeVideoEncoder();
+void captureFrame();
 
 // Audio callback function for PortAudio
 static int paCallback(const void* inputBuffer, void* outputBuffer,
@@ -142,6 +168,202 @@ void renderWaveform() {
     glEnd();
 }
 
+// Initialize video encoder
+bool initializeVideoEncoder() {
+    // Allocate frame buffer
+    frameBuffer.resize(WIDTH * HEIGHT * 3); // RGB format
+    
+    // Initialize FFmpeg components
+    const AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+    if (!codec) {
+        std::cerr << "Could not find H.264 encoder" << std::endl;
+        return false;
+    }
+    
+    codecContext = avcodec_alloc_context3(codec);
+    if (!codecContext) {
+        std::cerr << "Could not allocate video codec context" << std::endl;
+        return false;
+    }
+    
+    // Set codec parameters
+    codecContext->width = WIDTH;
+    codecContext->height = HEIGHT;
+    codecContext->time_base = (AVRational){1, FPS};
+    codecContext->framerate = (AVRational){FPS, 1};
+    codecContext->pix_fmt = AV_PIX_FMT_YUV420P;
+    codecContext->gop_size = 12;
+    codecContext->max_b_frames = 2;
+    
+    // Set codec-specific options
+    av_opt_set(codecContext->priv_data, "preset", "medium", 0);
+    
+    // Open codec
+    if (avcodec_open2(codecContext, codec, nullptr) < 0) {
+        std::cerr << "Could not open codec" << std::endl;
+        return false;
+    }
+    
+    // Create output format context
+    if (avformat_alloc_output_context2(&formatContext, nullptr, nullptr, outputVideoFile.c_str()) < 0) {
+        std::cerr << "Could not create output context" << std::endl;
+        return false;
+    }
+    
+    // Add video stream
+    videoStream = avformat_new_stream(formatContext, nullptr);
+    if (!videoStream) {
+        std::cerr << "Could not create video stream" << std::endl;
+        return false;
+    }
+    
+    videoStream->time_base = codecContext->time_base;
+    avcodec_parameters_from_context(videoStream->codecpar, codecContext);
+    
+    // Open output file
+    if (!(formatContext->oformat->flags & AVFMT_NOFILE)) {
+        if (avio_open(&formatContext->pb, outputVideoFile.c_str(), AVIO_FLAG_WRITE) < 0) {
+            std::cerr << "Could not open output file: " << outputVideoFile << std::endl;
+            return false;
+        }
+    }
+    
+    // Write file header
+    if (avformat_write_header(formatContext, nullptr) < 0) {
+        std::cerr << "Could not write header" << std::endl;
+        return false;
+    }
+    
+    // Allocate frames
+    frame = av_frame_alloc();
+    rgbFrame = av_frame_alloc();
+    if (!frame || !rgbFrame) {
+        std::cerr << "Could not allocate video frames" << std::endl;
+        return false;
+    }
+    
+    frame->format = codecContext->pix_fmt;
+    frame->width = codecContext->width;
+    frame->height = codecContext->height;
+    
+    rgbFrame->format = AV_PIX_FMT_RGB24;
+    rgbFrame->width = codecContext->width;
+    rgbFrame->height = codecContext->height;
+    
+    if (av_frame_get_buffer(frame, 0) < 0 || av_frame_get_buffer(rgbFrame, 0) < 0) {
+        std::cerr << "Could not allocate frame buffers" << std::endl;
+        return false;
+    }
+    
+    // Initialize conversion context
+    swsContext = sws_getContext(
+        WIDTH, HEIGHT, AV_PIX_FMT_RGB24,
+        WIDTH, HEIGHT, codecContext->pix_fmt,
+        SWS_BILINEAR, nullptr, nullptr, nullptr
+    );
+    
+    if (!swsContext) {
+        std::cerr << "Could not initialize conversion context" << std::endl;
+        return false;
+    }
+    
+    // Allocate packet
+    packet = av_packet_alloc();
+    if (!packet) {
+        std::cerr << "Could not allocate packet" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Video encoder initialized successfully" << std::endl;
+    return true;
+}
+
+// Finalize video encoding and close file
+void finalizeVideoEncoder() {
+    if (!recordVideo || !formatContext) return;
+    
+    // Flush encoder
+    avcodec_send_frame(codecContext, nullptr);
+    while (true) {
+        int ret = avcodec_receive_packet(codecContext, packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        
+        av_packet_rescale_ts(packet, codecContext->time_base, videoStream->time_base);
+        packet->stream_index = videoStream->index;
+        av_interleaved_write_frame(formatContext, packet);
+        av_packet_unref(packet);
+    }
+    
+    // Write file trailer
+    av_write_trailer(formatContext);
+    
+    // Close file
+    if (!(formatContext->oformat->flags & AVFMT_NOFILE)) {
+        avio_closep(&formatContext->pb);
+    }
+    
+    // Free resources
+    av_frame_free(&frame);
+    av_frame_free(&rgbFrame);
+    av_packet_free(&packet);
+    avcodec_free_context(&codecContext);
+    avformat_free_context(formatContext);
+    sws_freeContext(swsContext);
+    
+    std::cout << "Video saved to: " << outputVideoFile << std::endl;
+}
+
+// Capture current frame for video
+void captureFrame() {
+    if (!recordVideo || !formatContext) return;
+    
+    // Read pixels from OpenGL framebuffer
+    glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE, frameBuffer.data());
+    
+    // Fill RGB frame with pixel data (flipping vertically to correct orientation)
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            int srcPos = ((HEIGHT - 1 - y) * WIDTH + x) * 3;
+            int dstPos = (y * rgbFrame->linesize[0]) + (x * 3);
+            
+            rgbFrame->data[0][dstPos]     = frameBuffer[srcPos];     // R
+            rgbFrame->data[0][dstPos + 1] = frameBuffer[srcPos + 1]; // G
+            rgbFrame->data[0][dstPos + 2] = frameBuffer[srcPos + 2]; // B
+        }
+    }
+    
+    // Convert RGB to YUV
+    sws_scale(swsContext, rgbFrame->data, rgbFrame->linesize, 0, HEIGHT,
+              frame->data, frame->linesize);
+    
+    // Set frame timestamp
+    frame->pts = frameCount++;
+    
+    // Encode frame
+    if (avcodec_send_frame(codecContext, frame) < 0) {
+        std::cerr << "Error sending frame to encoder" << std::endl;
+        return;
+    }
+    
+    while (true) {
+        int ret = avcodec_receive_packet(codecContext, packet);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        if (ret < 0) {
+            std::cerr << "Error receiving packet from encoder" << std::endl;
+            break;
+        }
+        
+        av_packet_rescale_ts(packet, codecContext->time_base, videoStream->time_base);
+        packet->stream_index = videoStream->index;
+        
+        if (av_interleaved_write_frame(formatContext, packet) < 0) {
+            std::cerr << "Error writing frame to file" << std::endl;
+        }
+        
+        av_packet_unref(packet);
+    }
+}
+
 // Load WAV file using libsndfile
 bool loadWavFile(const std::string& filename) {
     SF_INFO sfInfo;
@@ -203,13 +425,17 @@ int main(int argc, char** argv) {
                 return -1;
             }
             i++; // Skip the next argument
+        } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
+            recordVideo = true;
+            outputVideoFile = argv[i + 1];
+            i++; // Skip the next argument
         } else {
             wavFile = argv[i];
         }
     }
     
     if (wavFile.empty()) {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform] <wav_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
     
@@ -255,6 +481,14 @@ int main(int argc, char** argv) {
     glOrtho(-1, 1, -1, 1, -1, 1);
     glMatrixMode(GL_MODELVIEW);
     
+    // Initialize video encoder if recording
+    if (recordVideo) {
+        if (!initializeVideoEncoder()) {
+            std::cerr << "Failed to initialize video encoder" << std::endl;
+            recordVideo = false;
+        }
+    }
+    
     // Set up audio stream
     PaStream* stream;
     err = Pa_OpenDefaultStream(&stream,
@@ -268,6 +502,7 @@ int main(int argc, char** argv) {
     
     if (err != paNoError) {
         std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+        if (recordVideo) finalizeVideoEncoder();
         fftw_destroy_plan(plan);
         glfwDestroyWindow(window);
         glfwTerminate();
@@ -280,6 +515,7 @@ int main(int argc, char** argv) {
     if (err != paNoError) {
         std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
         Pa_CloseStream(stream);
+        if (recordVideo) finalizeVideoEncoder();
         fftw_destroy_plan(plan);
         glfwDestroyWindow(window);
         glfwTerminate();
@@ -296,11 +532,21 @@ int main(int argc, char** argv) {
             renderWaveform();
         }
         
+        // Capture frame for video if recording
+        if (recordVideo) {
+            captureFrame();
+        }
+        
         glfwSwapBuffers(window);
         glfwPollEvents();
         
         // If playback finished and we want to loop, reset position
         if (playbackFinished) {
+            // If recording, finish when playback finishes
+            if (recordVideo) {
+                glfwSetWindowShouldClose(window, GLFW_TRUE);
+            }
+            
             // Uncomment to enable looping
             // currentPosition.store(0);
             // playbackFinished = false;
@@ -311,6 +557,11 @@ int main(int argc, char** argv) {
     if (stream) {
         Pa_StopStream(stream);
         Pa_CloseStream(stream);
+    }
+    
+    // Finalize video if recording
+    if (recordVideo) {
+        finalizeVideoEncoder();
     }
     
     fftw_destroy_plan(plan);

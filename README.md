@@ -8,6 +8,7 @@ A simple music visualizer that plays a WAV file and displays a frequency or wave
 - Multiple visualization types:
   - Frequency bars (16 green bars)
   - Waveform display
+- Record visualizations to MP4 video files
 - Press Escape to exit the visualizer
 
 ## Requirements
@@ -18,11 +19,12 @@ The following libraries are required:
 - FFTW3
 - libsndfile
 - PortAudio
+- FFmpeg (libavcodec, libavformat, libavutil, libswscale)
 
 On macOS, you can install these using Homebrew:
 
 ```bash
-brew install glew glfw fftw libsndfile portaudio
+brew install glew glfw fftw libsndfile portaudio ffmpeg
 ```
 
 ## Building
@@ -37,7 +39,7 @@ chmod +x build.sh
 ## Usage
 
 ```bash
-./visualizer [--type bars|waveform] <wav_file>
+./visualizer [--type bars|waveform] [--record output.mp4] <wav_file>
 ```
 
 Examples:
@@ -51,6 +53,12 @@ Examples:
 
 # Explicitly select bar equalizer
 ./visualizer --type bars sample.wav
+
+# Record bar visualization to a video file
+./visualizer --record output.mp4 sample.wav
+
+# Record waveform visualization to a video file
+./visualizer --type waveform --record output.mp4 sample.wav
 ```
 
 ## Creating Test Files
@@ -71,3 +79,9 @@ sox -n -r 44100 -c 1 complex_sample.wav synth 10 sine 110 sine 220 sine 440 sine
 ## Controls
 
 - Press `Esc` to exit the visualizer 
+
+## Video Recording
+
+When using the `--record` option, the visualizer will save the visualization to an MP4 video file. The recording will automatically stop when the audio playback finishes. The resulting video is encoded using H.264 at 30 frames per second and will have the same resolution as the visualizer window (800x600).
+
+Note: Recording requires FFmpeg libraries to be installed. 
