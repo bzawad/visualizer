@@ -777,7 +777,7 @@ int main(int argc, char **argv)
 
     if (wavFile.empty())
     {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram|circle] [--record output.mp4] <wav_file>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram|circle|terrain] [--record output.mp4] <wav_file>" << std::endl;
         return -1;
     }
 
