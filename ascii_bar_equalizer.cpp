@@ -68,28 +68,50 @@ void AsciiBarEqualizer::renderLiveFrame(const std::vector<float> &audioData,
 
 void AsciiBarEqualizer::renderBars(fftw_complex *fftOutputBuffer)
 {
-    // Calculate frequency bands for bars
+    // Calculate frequency bands for bars using logarithmic scale
     float barWidth = 2.0f / numBars; // normalized width in [-1, 1] space
+
+    // Pre-calculate frequency scaling factors
+    const float minFreq = 20.0f;    // 20 Hz
+    const float maxFreq = 20000.0f; // 20 kHz
+    const float freqRange = std::log10(maxFreq / minFreq);
 
     for (int i = 0; i < numBars; i++)
     {
-        // Map bar index to frequency range (logarithmic scale for better visual)
-        int startIdx = (int)(pow(N / 2, (float)i / numBars) - 1);
-        int endIdx = (int)(pow(N / 2, (float)(i + 1) / numBars) - 1);
-        startIdx = std::max(0, startIdx);
-        endIdx = std::min(N / 2 - 1, endIdx);
+        // Calculate frequency range for this bar using logarithmic scale
+        float f1 = minFreq * std::pow(10.0f, (freqRange * i) / numBars);
+        float f2 = minFreq * std::pow(10.0f, (freqRange * (i + 1)) / numBars);
+
+        // Convert frequencies to FFT bin indices
+        int startIdx = static_cast<int>((f1 * N) / 44100.0f);
+        int endIdx = static_cast<int>((f2 * N) / 44100.0f);
+
+        // Clamp indices to valid range
+        startIdx = std::max(0, std::min(startIdx, N / 2 - 1));
+        endIdx = std::max(0, std::min(endIdx, N / 2 - 1));
+        endIdx = std::max(endIdx, startIdx + 1); // Ensure at least one bin
 
         // Calculate average amplitude in this frequency range
         float sum = 0.0f;
         for (int j = startIdx; j <= endIdx; j++)
         {
-            sum += std::sqrt(fftOutputBuffer[j][0] * fftOutputBuffer[j][0] +
-                             fftOutputBuffer[j][1] * fftOutputBuffer[j][1]);
+            float magnitude = std::sqrt(fftOutputBuffer[j][0] * fftOutputBuffer[j][0] +
+                                        fftOutputBuffer[j][1] * fftOutputBuffer[j][1]);
+
+            // Apply frequency-dependent scaling
+            float freqScaling = std::pow(static_cast<float>(j) / startIdx, 0.5f); // Square root scaling
+            magnitude *= freqScaling;
+
+            sum += magnitude;
         }
         float avg = sum / (endIdx - startIdx + 1);
 
+        // Apply additional scaling based on frequency band
+        float bandScaling = 1.0f + (static_cast<float>(i) / numBars) * 2.0f; // Linear scaling with frequency
+        avg *= bandScaling;
+
         // Normalize and apply some scaling for better visualization
-        float height = std::min(1.0f, avg / 50.0f);
+        float height = std::min(1.0f, avg / 25.0f); // Adjusted base scaling
 
         // Calculate bar position
         float xLeft = -1.0f + i * barWidth;
