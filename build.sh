@@ -29,6 +29,9 @@ g++ $CXXFLAGS -c ascii_bar_equalizer.cpp -o ascii_bar_equalizer.o
 echo "Compiling spectrogram.cpp..."
 g++ $CXXFLAGS -c spectrogram.cpp -o spectrogram.o
 
+echo "Compiling terrain_visualizer_3d.cpp..."
+g++ $CXXFLAGS -c terrain_visualizer_3d.cpp -o terrain_visualizer_3d.o
+
 echo "Compiling visualizer_factory.cpp..."
 g++ $CXXFLAGS -c visualizer_factory.cpp -o visualizer_factory.o
 
@@ -38,6 +41,6 @@ g++ $CXXFLAGS -c visualizer.cpp -o visualizer.o
 
 # Link all object files
 echo "Linking..."
-g++ visualizer.o bar_equalizer.o waveform.o multi_band_waveform.o multi_band_circle_waveform.o ascii_bar_equalizer.o spectrogram.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
+g++ visualizer.o bar_equalizer.o waveform.o multi_band_waveform.o multi_band_circle_waveform.o ascii_bar_equalizer.o spectrogram.o terrain_visualizer_3d.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
 
 echo "Build complete. Run with: ./visualizer"
