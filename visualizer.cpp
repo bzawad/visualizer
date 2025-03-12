@@ -44,7 +44,8 @@ fftw_plan plan;             // FFTW plan
 // Audio settings
 const int SAMPLE_RATE = 44100;
 const int FRAMES_PER_BUFFER = 512; // For PortAudio
-std::vector<float> audioData;
+const int OUTPUT_CHANNELS = 1;     // Always output mono audio
+std::vector<float> audioData;      // Our internal buffer is always mono
 std::atomic<bool> playbackFinished(false); // For live mode
 std::atomic<size_t> currentPosition(0);    // For live mode
 std::mutex audioMutex;                     // For live mode
@@ -210,7 +211,7 @@ bool initializeVideoEncoder() {
     audioCodecContext->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_MONO;
 #else
     audioCodecContext->channel_layout = AV_CH_LAYOUT_MONO;
-    audioCodecContext->channels = 1;
+    audioCodecContext->channels = OUTPUT_CHANNELS;
 #endif
     audioCodecContext->time_base = (AVRational){1, SAMPLE_RATE};
     audioCodecContext->bit_rate = 128000;
@@ -510,22 +511,50 @@ bool loadWavFile(const std::string& filename) {
         return false;
     }
     
-    // Check audio format
-    if (sfInfo.channels != 1) {
-        std::cerr << "Only mono WAV files are supported for simplicity" << std::endl;
-        sf_close(sndFile);
-        return false;
-    }
+    // Print audio file information
+    std::cout << "Audio file: " << filename << std::endl;
+    std::cout << "Sample rate: " << sfInfo.samplerate << " Hz" << std::endl;
+    std::cout << "Channels: " << sfInfo.channels << std::endl;
+    std::cout << "Frames: " << sfInfo.frames << std::endl;
     
-    // Resize audio data buffer
-    audioData.resize(sfInfo.frames);
-    
-    // Read the entire file
-    sf_count_t count = sf_read_float(sndFile, audioData.data(), audioData.size());
-    if (count != sfInfo.frames) {
-        std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
-        sf_close(sndFile);
-        return false;
+    // Handle stereo/multi-channel files by converting to mono
+    if (sfInfo.channels > 1) {
+        std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
+        
+        // Allocate a buffer for multichannel data
+        std::vector<float> multiChannelBuffer(sfInfo.frames * sfInfo.channels);
+        
+        // Read the entire file
+        sf_count_t count = sf_read_float(sndFile, multiChannelBuffer.data(), multiChannelBuffer.size());
+        if (count != sfInfo.frames * sfInfo.channels) {
+            std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
+            sf_close(sndFile);
+            return false;
+        }
+        
+        // Resize our mono audio buffer
+        audioData.resize(sfInfo.frames);
+        
+        // Convert multi-channel to mono by averaging all channels
+        for (sf_count_t i = 0; i < sfInfo.frames; i++) {
+            float sum = 0.0f;
+            for (int ch = 0; ch < sfInfo.channels; ch++) {
+                sum += multiChannelBuffer[i * sfInfo.channels + ch];
+            }
+            audioData[i] = sum / sfInfo.channels;
+        }
+    } 
+    else {
+        // Mono file - just load it directly
+        audioData.resize(sfInfo.frames);
+        
+        // Read the entire file
+        sf_count_t count = sf_read_float(sndFile, audioData.data(), audioData.size());
+        if (count != sfInfo.frames) {
+            std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
+            sf_close(sndFile);
+            return false;
+        }
     }
     
     sf_close(sndFile);
@@ -803,7 +832,7 @@ int main(int argc, char** argv) {
         PaStream* stream;
         err = Pa_OpenDefaultStream(&stream,
                                    0,          // No input channels
-                                   1,          // Mono output
+                                   OUTPUT_CHANNELS, // Mono output
                                    paFloat32,  // 32-bit floating point output
                                    SAMPLE_RATE,
                                    FRAMES_PER_BUFFER,
