@@ -17,6 +17,9 @@ void Waveform::renderFrame(const std::vector<float>& audioData,
     (void)fftOutputBuffer;
     (void)fftPlan;
     
+    // Set line width to 5 pixels for thicker waveform
+    glLineWidth(5.0f);
+    
     // Set color for visualization
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
     
@@ -36,6 +39,9 @@ void Waveform::renderFrame(const std::vector<float>& audioData,
     }
     
     glEnd();
+    
+    // Reset line width to default
+    glLineWidth(1.0f);
 }
 
 void Waveform::renderLiveFrame(const std::vector<float>& audioData, 
@@ -47,6 +53,9 @@ void Waveform::renderLiveFrame(const std::vector<float>& audioData,
     (void)fftInputBuffer;
     (void)fftOutputBuffer;
     (void)fftPlan;
+    
+    // Set line width to 5 pixels for thicker waveform
+    glLineWidth(5.0f);
     
     // Set color for visualization
     glColor3f(0.0f, 1.0f, 0.0f); // Green visualization
@@ -63,4 +72,7 @@ void Waveform::renderLiveFrame(const std::vector<float>& audioData,
     }
     
     glEnd();
+    
+    // Reset line width to default
+    glLineWidth(1.0f);
 } 
