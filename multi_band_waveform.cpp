@@ -104,12 +104,6 @@ void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOf
 {
     glColor3fv(color);
 
-    // Draw the center line for this band
-    glBegin(GL_LINES);
-    glVertex2f(-1.0f, yOffset);
-    glVertex2f(1.0f, yOffset);
-    glEnd();
-
     // Draw the waveform
     glBegin(GL_LINE_STRIP);
 
