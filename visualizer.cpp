@@ -20,6 +20,7 @@
 #include "waveform.h"  // Add this include for Waveform class
 #include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
 #include "multi_band_circle_waveform.h"  // Add this include for MultiBandCircleWaveform class
+#include "grid_visualizer.h"
 
 // FFmpeg libraries
 extern "C"
@@ -140,8 +141,8 @@ void renderFrameAtTime(float timeSeconds)
     // The OpenGL state (viewport, matrices) is now set by the caller
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Use the current visualizer to render the frame
-    currentVisualizer->renderFrame(audioData, in, out, plan, timeSeconds);
+    // Use the current visualizer to render the frame with multiple audio sources
+    currentVisualizer->renderFrame(multiAudioData, in, out, plan, timeSeconds);
 }
 
 // OpenGL rendering function for live mode
@@ -155,8 +156,8 @@ void renderLiveVisualization()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // Use the current visualizer to render the live frame
-    currentVisualizer->renderLiveFrame(audioData, in, out, plan, currentPosition.load());
+    // Use the current visualizer to render the live frame with multiple audio sources
+    currentVisualizer->renderLiveFrame(multiAudioData, in, out, plan, currentPosition.load());
 }
 
 // Initialize video encoder
@@ -851,6 +852,8 @@ int main(int argc, char **argv)
         currentVisualizerType = SPECTROGRAM;
     } else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle") {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
+    } else if (visualizerTypeName == "grid") {
+        currentVisualizerType = GRID_VISUALIZER;
     } else {
         currentVisualizerType = BAR_EQUALIZER;
     }
@@ -884,6 +887,13 @@ int main(int argc, char **argv)
         MultiBandCircleWaveform* circleVis = dynamic_cast<MultiBandCircleWaveform*>(currentVisualizer.get());
         if (circleVis) {
             circleVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using grid visualizer, set the multiple audio sources
+    else if (currentVisualizerType == GRID_VISUALIZER) {
+        GridVisualizer* gridVis = dynamic_cast<GridVisualizer*>(currentVisualizer.get());
+        if (gridVis) {
+            gridVis->setAudioSources(multiAudioData);
         }
     }
 

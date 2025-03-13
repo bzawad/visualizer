@@ -2,173 +2,238 @@
 #include <GL/glew.h>
 #include <cmath>
 #include <algorithm>
+#include <iostream>
+#include <GLFW/glfw3.h>
 
-GridVisualizer::GridVisualizer()
-{
-}
-
-GridVisualizer::~GridVisualizer()
-{
+void GridVisualizer::initialize(int width, int height) {
+    screenWidth = width;
+    screenHeight = height;
 }
 
 void GridVisualizer::setAudioSources(const std::vector<std::vector<float>>& sources) {
     audioSources = sources;
 }
 
-void GridVisualizer::processAudioForFFT(const std::vector<float>& audioData, size_t position, double* fftInputBuffer) {
-    // Apply Hanning window and fill FFT input buffer
-    for (int i = 0; i < N; i++) {
-        if (position + i < audioData.size()) {
-            // Apply Hanning window to reduce spectral leakage
-            double window = 0.5 * (1.0 - cos(2.0 * M_PI * i / (N - 1)));
-            fftInputBuffer[i] = audioData[position + i] * window;
-        } else {
-            fftInputBuffer[i] = 0.0;
-        }
+void GridVisualizer::calculateGridDimensions(int numSources, int& rows, int& cols) {
+    if (numSources <= 1) {
+        rows = 1;
+        cols = 1;
+    } else if (numSources <= 2) {
+        rows = 1;
+        cols = 2;
+    } else if (numSources <= 4) {
+        rows = 2;
+        cols = 2;
+    } else if (numSources <= 6) {
+        rows = 2;
+        cols = 3;
+    } else {
+        rows = 3;
+        cols = 3;
     }
 }
 
-void GridVisualizer::renderFrame(const std::vector<float>& audioData,
-                               double* fftInputBuffer,
-                               fftw_complex* fftOutputBuffer,
-                               fftw_plan& fftPlan,
-                               float timeSeconds)
-{
-    // Calculate the sample index for the current time
-    size_t sampleIndex = static_cast<size_t>(timeSeconds * 44100); // Assuming 44.1kHz
+void GridVisualizer::processAudioForFFT(const std::vector<float>& audioData, size_t position, double* fftInputBuffer) {
+    // Apply Hanning window and copy data
+    for (int i = 0; i < N; i++) {
+        size_t index = (position + i) % audioData.size();
+        double multiplier = 0.5 * (1 - cos(2 * M_PI * i / (N - 1)));
+        fftInputBuffer[i] = audioData[index] * multiplier;
+    }
+}
 
-    // Process audio data for FFT
-    processAudioForFFT(audioData, sampleIndex, fftInputBuffer);
-
-    // Execute FFT
-    fftw_execute(fftPlan);
-
-    // Calculate magnitudes for each frequency bin using logarithmic spacing
-    std::vector<float> magnitudes(GRID_SIZE * GRID_SIZE);
+void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, float x1, float y1, float x2, float y2) {
+    float cellWidth = (x2 - x1) / GRID_SIZE;
+    float cellHeight = (y2 - y1) / GRID_SIZE;
+    
+    // Calculate frequency bands
+    std::vector<float> gridValues(GRID_SIZE * GRID_SIZE, 0.0f);
     float logMinFreq = log10(MIN_FREQ);
     float logMaxFreq = log10(MAX_FREQ);
-    float logStep = (logMaxFreq - logMinFreq) / (GRID_SIZE * GRID_SIZE);
+    float logRange = logMaxFreq - logMinFreq;
+    
+    // Map FFT bins to grid cells
+    for (int i = 1; i < N/2; i++) {
+        float freq = i * SAMPLE_RATE / (float)N;
+        if (freq < MIN_FREQ || freq > MAX_FREQ) continue;
+        
+        float logFreq = log10(freq);
+        float normalizedFreq = (logFreq - logMinFreq) / logRange;
+        
+        // Map frequency to X coordinate (left to right = low to high frequency)
+        int gridX = static_cast<int>(normalizedFreq * GRID_SIZE);
+        
+        // Get magnitude and normalize it
+        float magnitude = magnitudes[i];
+        float normalizedMagnitude = std::min(1.0f, magnitude * 20.0f);  // Increased amplification
+        
+        // Fill the entire column up to the magnitude level
+        if (gridX >= 0 && gridX < GRID_SIZE) {
+            for (int y = 0; y < GRID_SIZE; y++) {
+                float cellMagnitude = y / static_cast<float>(GRID_SIZE);
+                if (cellMagnitude <= normalizedMagnitude) {
+                    gridValues[y * GRID_SIZE + gridX] = std::max(gridValues[y * GRID_SIZE + gridX], 
+                        1.0f - (cellMagnitude / normalizedMagnitude));  // Gradient effect
+                }
+            }
+        }
+    }
+    
+    // Apply smoothing to fill gaps
+    std::vector<float> smoothedValues = gridValues;
+    for (int y = 1; y < GRID_SIZE - 1; y++) {
+        for (int x = 1; x < GRID_SIZE - 1; x++) {
+            float sum = 0.0f;
+            int count = 0;
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    sum += gridValues[(y + dy) * GRID_SIZE + (x + dx)];
+                    count++;
+                }
+            }
+            smoothedValues[y * GRID_SIZE + x] = sum / count;
+        }
+    }
+    
+    // Render grid cells
+    glBegin(GL_QUADS);
+    for (int y = 0; y < GRID_SIZE; y++) {
+        for (int x = 0; x < GRID_SIZE; x++) {
+            float value = smoothedValues[y * GRID_SIZE + x];
+            
+            // Use a more vibrant color scheme
+            float r = std::min(1.0f, value * 2.0f);  // Red increases faster
+            float g = value * 0.5f;                  // Less green for contrast
+            float b = std::max(0.2f, value);         // Minimum blue for visibility
+            
+            glColor3f(r, g, b);
+            
+            float cellX = x1 + x * cellWidth;
+            float cellY = y1 + y * cellHeight;
+            
+            glVertex2f(cellX, cellY);
+            glVertex2f(cellX + cellWidth, cellY);
+            glVertex2f(cellX + cellWidth, cellY + cellHeight);
+            glVertex2f(cellX, cellY + cellHeight);
+        }
+    }
+    glEnd();
+    
+    // Draw grid lines for better visibility
+    glColor3f(0.3f, 0.3f, 0.3f);
+    glBegin(GL_LINES);
+    for (int i = 0; i <= GRID_SIZE; i++) {
+        float x = x1 + i * cellWidth;
+        float y = y1 + i * cellHeight;
+        
+        // Vertical lines
+        glVertex2f(x, y1);
+        glVertex2f(x, y2);
+        
+        // Horizontal lines
+        glVertex2f(x1, y);
+        glVertex2f(x2, y);
+    }
+    glEnd();
+}
 
-    for (int i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-        // Calculate frequency for this grid cell using logarithmic spacing
-        float logFreq = logMinFreq + i * logStep;
-        float freq = pow(10.0f, logFreq);
+// Multi-source methods
+void GridVisualizer::renderFrame(const std::vector<std::vector<float>>& audioSources,
+                               double* in,
+                               fftw_complex* out,
+                               fftw_plan& plan,
+                               float timeSeconds) {
+    int rows, cols;
+    calculateGridDimensions(audioSources.size(), rows, cols);
+    
+    float gridWidth = 2.0f / cols;  // Convert to OpenGL coordinates (-1 to 1)
+    float gridHeight = 2.0f / rows;
+    
+    for (size_t i = 0; i < audioSources.size(); i++) {
+        int row = i / cols;
+        int col = i % cols;
         
-        // Convert frequency to FFT bin index
-        int bin = static_cast<int>((freq * N) / 44100.0f);
-        bin = std::min(bin, N/2 - 1); // Ensure we don't exceed Nyquist frequency
+        float x1 = -1.0f + col * gridWidth;  // Start from -1 (left edge)
+        float y1 = 1.0f - (row + 1) * gridHeight;  // Start from 1 (top edge)
+        float x2 = x1 + gridWidth;
+        float y2 = y1 + gridHeight;
         
-        // Calculate magnitude
-        float magnitude = 0.0f;
-        if (bin >= 0 && bin < N/2) {
-            magnitude = std::sqrt(fftOutputBuffer[bin][0] * fftOutputBuffer[bin][0] +
-                                fftOutputBuffer[bin][1] * fftOutputBuffer[bin][1]);
-            
-            // Apply frequency-dependent scaling with increased response
-            float freqScaling = std::pow(static_cast<float>(bin) / (N/2), 0.3f) * 1.25f;
-            magnitude *= freqScaling;
-            
-            // Normalize with increased brightness
-            magnitude = std::min(1.0f, magnitude / 20.0f); // Reduced from 25.0f to 20.0f for more brightness
+        // Add padding
+        float padding = 0.01f;
+        x1 += padding;
+        y1 += padding;
+        x2 -= padding;
+        y2 -= padding;
+        
+        size_t position = static_cast<size_t>(timeSeconds * SAMPLE_RATE) % audioSources[i].size();
+        processAudioForFFT(audioSources[i], position, in);
+        
+        fftw_execute(plan);
+        
+        std::vector<float> magnitudes(N/2);
+        for (int j = 0; j < N/2; j++) {
+            magnitudes[j] = sqrt(out[j][0] * out[j][0] + out[j][1] * out[j][1]) / N;
         }
         
-        magnitudes[i] = magnitude;
+        renderFrequencyGrid(magnitudes, x1, y1, x2, y2);
     }
+}
 
-    // Render the grid
-    renderGrid(magnitudes);
+void GridVisualizer::renderLiveFrame(const std::vector<std::vector<float>>& audioSources,
+                                   double* in,
+                                   fftw_complex* out,
+                                   fftw_plan& plan,
+                                   size_t currentPosition) {
+    int rows, cols;
+    calculateGridDimensions(audioSources.size(), rows, cols);
+    
+    float gridWidth = 2.0f / cols;  // Convert to OpenGL coordinates (-1 to 1)
+    float gridHeight = 2.0f / rows;
+    
+    for (size_t i = 0; i < audioSources.size(); i++) {
+        int row = i / cols;
+        int col = i % cols;
+        
+        float x1 = -1.0f + col * gridWidth;  // Start from -1 (left edge)
+        float y1 = 1.0f - (row + 1) * gridHeight;  // Start from 1 (top edge)
+        float x2 = x1 + gridWidth;
+        float y2 = y1 + gridHeight;
+        
+        // Add padding
+        float padding = 0.01f;
+        x1 += padding;
+        y1 += padding;
+        x2 -= padding;
+        y2 -= padding;
+        
+        processAudioForFFT(audioSources[i], currentPosition, in);
+        
+        fftw_execute(plan);
+        
+        std::vector<float> magnitudes(N/2);
+        for (int j = 0; j < N/2; j++) {
+            magnitudes[j] = sqrt(out[j][0] * out[j][0] + out[j][1] * out[j][1]) / N;
+        }
+        
+        renderFrequencyGrid(magnitudes, x1, y1, x2, y2);
+    }
+}
+
+// Legacy single-source methods
+void GridVisualizer::renderFrame(const std::vector<float>& audioData,
+                               double* in,
+                               fftw_complex* out,
+                               fftw_plan& plan,
+                               float timeSeconds) {
+    std::vector<std::vector<float>> sources = {audioData};
+    renderFrame(sources, in, out, plan, timeSeconds);
 }
 
 void GridVisualizer::renderLiveFrame(const std::vector<float>& audioData,
-                                   double* fftInputBuffer,
-                                   fftw_complex* fftOutputBuffer,
-                                   fftw_plan& fftPlan,
-                                   size_t currentPosition)
-{
-    // Process audio data for FFT
-    processAudioForFFT(audioData, currentPosition, fftInputBuffer);
-
-    // Execute FFT
-    fftw_execute(fftPlan);
-
-    // Calculate magnitudes for each frequency bin using logarithmic spacing
-    std::vector<float> magnitudes(GRID_SIZE * GRID_SIZE);
-    float logMinFreq = log10(MIN_FREQ);
-    float logMaxFreq = log10(MAX_FREQ);
-    float logStep = (logMaxFreq - logMinFreq) / (GRID_SIZE * GRID_SIZE);
-
-    for (int i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-        // Calculate frequency for this grid cell using logarithmic spacing
-        float logFreq = logMinFreq + i * logStep;
-        float freq = pow(10.0f, logFreq);
-        
-        // Convert frequency to FFT bin index
-        int bin = static_cast<int>((freq * N) / 44100.0f);
-        bin = std::min(bin, N/2 - 1); // Ensure we don't exceed Nyquist frequency
-        
-        // Calculate magnitude
-        float magnitude = 0.0f;
-        if (bin >= 0 && bin < N/2) {
-            magnitude = std::sqrt(fftOutputBuffer[bin][0] * fftOutputBuffer[bin][0] +
-                                fftOutputBuffer[bin][1] * fftOutputBuffer[bin][1]);
-            
-            // Apply frequency-dependent scaling with increased response
-            float freqScaling = std::pow(static_cast<float>(bin) / (N/2), 0.3f) * 1.25f;
-            magnitude *= freqScaling;
-            
-            // Normalize with increased brightness
-            magnitude = std::min(1.0f, magnitude / 20.0f); // Reduced from 25.0f to 20.0f for more brightness
-        }
-        
-        magnitudes[i] = magnitude;
-    }
-
-    // Render the grid
-    renderGrid(magnitudes);
-}
-
-void GridVisualizer::renderGrid(const std::vector<float>& magnitudes) {
-    // Calculate cell size
-    float cellWidth = 2.0f / GRID_SIZE;
-    float cellHeight = 2.0f / GRID_SIZE;
-    
-    // Draw grid cells
-    glBegin(GL_QUADS);
-    for (int i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-        // Convert linear index to grid coordinates
-        // Start from bottom-left, go up, then next column
-        int col = i / GRID_SIZE;
-        int row = i % GRID_SIZE;
-        
-        // Calculate cell boundaries
-        float x1 = -1.0f + col * cellWidth;
-        float y1 = -1.0f + row * cellHeight;
-        float x2 = x1 + cellWidth;
-        float y2 = y1 + cellHeight;
-        
-        // Set color based on magnitude (white with varying brightness)
-        float brightness = magnitudes[i];
-        glColor3f(brightness, brightness, brightness);
-        
-        // Draw cell
-        glVertex2f(x1, y1);
-        glVertex2f(x2, y1);
-        glVertex2f(x2, y2);
-        glVertex2f(x1, y2);
-    }
-    glEnd();
-    
-    // Draw grid lines
-    glColor3f(0.2f, 0.2f, 0.2f);
-    glBegin(GL_LINES);
-    for (int i = 0; i <= GRID_SIZE; i++) {
-        float pos = -1.0f + i * cellWidth;
-        // Vertical lines
-        glVertex2f(pos, -1.0f);
-        glVertex2f(pos, 1.0f);
-        // Horizontal lines
-        glVertex2f(-1.0f, pos);
-        glVertex2f(1.0f, pos);
-    }
-    glEnd();
+                                   double* in,
+                                   fftw_complex* out,
+                                   fftw_plan& plan,
+                                   size_t currentPosition) {
+    std::vector<std::vector<float>> sources = {audioData};
+    renderLiveFrame(sources, in, out, plan, currentPosition);
 } 
