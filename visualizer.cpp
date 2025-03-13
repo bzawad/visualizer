@@ -18,6 +18,7 @@
 #include "visualizer_base.h"
 #include "visualizer_factory.h"
 #include "waveform.h"  // Add this include for Waveform class
+#include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
 
 // FFmpeg libraries
 extern "C"
@@ -865,6 +866,13 @@ int main(int argc, char **argv)
         Waveform* waveformVis = dynamic_cast<Waveform*>(currentVisualizer.get());
         if (waveformVis) {
             waveformVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using multi-band waveform visualizer, set the multiple audio sources
+    else if (currentVisualizerType == MULTI_BAND_WAVEFORM) {
+        MultiBandWaveform* multiBandVis = dynamic_cast<MultiBandWaveform*>(currentVisualizer.get());
+        if (multiBandVis) {
+            multiBandVis->setAudioSources(multiAudioData);
         }
     }
 

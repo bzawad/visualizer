@@ -15,6 +15,42 @@ MultiBandWaveform::~MultiBandWaveform()
 {
 }
 
+void MultiBandWaveform::setAudioSources(const std::vector<std::vector<float>>& sources) {
+    audioSources = sources;
+}
+
+void MultiBandWaveform::calculateGridDimensions(int numSources, int& rows, int& cols) const {
+    if (numSources <= 1) {
+        rows = 1;
+        cols = 1;
+    } else if (numSources == 2) {
+        rows = 1;
+        cols = 2;
+    } else if (numSources <= 4) {
+        rows = 2;
+        cols = 2;
+    } else if (numSources <= 6) {
+        rows = 2;
+        cols = 3;
+    } else {
+        rows = 2;
+        cols = 4;
+    }
+}
+
+void MultiBandWaveform::processAudioForFFT(const std::vector<float>& audioData, size_t position, double* fftInputBuffer) {
+    // Apply Hanning window and fill FFT input buffer
+    for (int i = 0; i < N; i++) {
+        if (position + i < audioData.size()) {
+            // Apply Hanning window to reduce spectral leakage
+            double window = 0.5 * (1.0 - cos(2.0 * M_PI * i / (N - 1)));
+            fftInputBuffer[i] = audioData[position + i] * window;
+        } else {
+            fftInputBuffer[i] = 0.0;
+        }
+    }
+}
+
 void MultiBandWaveform::renderFrame(const std::vector<float> &audioData,
                                     double *fftInputBuffer,
                                     fftw_complex *fftOutputBuffer,
@@ -23,46 +59,73 @@ void MultiBandWaveform::renderFrame(const std::vector<float> &audioData,
 {
     // Calculate the sample index for the current time
     size_t sampleIndex = static_cast<size_t>(timeSeconds * 44100); // Assuming 44.1kHz
-    if (sampleIndex >= audioData.size())
-        return;
 
-    // Apply Hanning window and fill FFT input buffer
-    for (int i = 0; i < N; i++)
-    {
-        if (sampleIndex + i < audioData.size())
-        {
-            // Apply Hanning window to reduce spectral leakage
-            double window = 0.5 * (1.0 - cos(2.0 * M_PI * i / (N - 1)));
-            fftInputBuffer[i] = audioData[sampleIndex + i] * window;
-        }
-        else
-        {
-            fftInputBuffer[i] = 0.0;
-        }
+    // Calculate grid dimensions
+    int rows, cols;
+    calculateGridDimensions(audioSources.empty() ? 1 : audioSources.size(), rows, cols);
+
+    // Calculate cell dimensions
+    float cellWidth = 2.0f / cols;
+    float cellHeight = 2.0f / rows;
+
+    // Process each audio source
+    for (size_t sourceIdx = 0; sourceIdx < (audioSources.empty() ? 1 : audioSources.size()); sourceIdx++) {
+        const auto& source = audioSources.empty() ? audioData : audioSources[sourceIdx];
+        
+        if (sampleIndex >= source.size())
+            continue;
+
+        // Calculate grid position
+        int row = sourceIdx / cols;
+        int col = sourceIdx % cols;
+
+        // Calculate cell boundaries with padding
+        float padding = 0.02f;
+        float x1 = -1.0f + col * cellWidth + padding;
+        float y1 = 1.0f - (row + 1) * cellHeight + padding;
+        float x2 = x1 + cellWidth - 2 * padding;
+        float y2 = y1 + cellHeight - 2 * padding;
+        float cellCenterY = (y1 + y2) / 2.0f;
+        float effectiveHeight = (y2 - y1) / 3.0f; // Divide height by 3 for the three bands
+
+        // Process audio data for FFT
+        processAudioForFFT(source, sampleIndex, fftInputBuffer);
+
+        // Execute FFT
+        fftw_execute(fftPlan);
+
+        // Calculate frequency bin indices for cutoff frequencies
+        const int lowBin = LOW_CUTOFF * N / 44100;
+        const int midBin = MID_CUTOFF * N / 44100;
+        const int highBin = HIGH_CUTOFF * N / 44100;
+
+        // Filter and render each band
+        std::vector<float> lowBand = filterBand(fftOutputBuffer, 0, lowBin);
+        std::vector<float> midBand = filterBand(fftOutputBuffer, lowBin, midBin);
+        std::vector<float> highBand = filterBand(fftOutputBuffer, midBin, highBin);
+
+        // Apply band-specific scaling factors
+        float lowScale = 2.0f;  // Boost low frequencies
+        float midScale = 1.5f;  // Moderate boost for mids
+        float highScale = 1.0f; // Normal scale for highs
+
+        float cellWidth = x2 - x1;
+        
+        // Render bands in their respective positions with bipolar display
+        renderBand(lowBand, cellCenterY - effectiveHeight, effectiveHeight * lowScale, x1, cellWidth, LOW_COLOR);
+        renderBand(midBand, cellCenterY, effectiveHeight * midScale, x1, cellWidth, MID_COLOR);
+        renderBand(highBand, cellCenterY + effectiveHeight, effectiveHeight * highScale, x1, cellWidth, HIGH_COLOR);
+
+        // Draw cell border
+        glLineWidth(1.0f);
+        glColor3f(0.3f, 0.3f, 0.3f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(x1 - padding, y1 - padding);
+        glVertex2f(x2 + padding, y1 - padding);
+        glVertex2f(x2 + padding, y2 + padding);
+        glVertex2f(x1 - padding, y2 + padding);
+        glEnd();
     }
-
-    // Execute FFT
-    fftw_execute(fftPlan);
-
-    // Calculate frequency bin indices for cutoff frequencies
-    const int lowBin = LOW_CUTOFF * N / 44100;
-    const int midBin = MID_CUTOFF * N / 44100;
-    const int highBin = HIGH_CUTOFF * N / 44100;
-
-    // Filter and render each band
-    std::vector<float> lowBand = filterBand(fftOutputBuffer, 0, lowBin);
-    std::vector<float> midBand = filterBand(fftOutputBuffer, lowBin, midBin);
-    std::vector<float> highBand = filterBand(fftOutputBuffer, midBin, highBin);
-
-    // Apply band-specific scaling factors
-    float lowScale = 2.0f;  // Boost low frequencies
-    float midScale = 1.5f;  // Moderate boost for mids
-    float highScale = 1.0f; // Normal scale for highs
-
-    // Render bands in their respective positions with bipolar display
-    renderBand(lowBand, -0.6f, 0.3f * lowScale, LOW_COLOR);   // Bottom band
-    renderBand(midBand, 0.0f, 0.3f * midScale, MID_COLOR);    // Middle band
-    renderBand(highBand, 0.6f, 0.3f * highScale, HIGH_COLOR); // Top band
 }
 
 void MultiBandWaveform::renderLiveFrame(const std::vector<float> &audioData,
@@ -71,36 +134,76 @@ void MultiBandWaveform::renderLiveFrame(const std::vector<float> &audioData,
                                         fftw_plan &fftPlan,
                                         size_t currentPosition)
 {
-    // Mark unused parameters to silence compiler warnings
-    (void)audioData;
-    (void)fftInputBuffer;
-    (void)currentPosition;
+    // Similar to renderFrame but using currentPosition
+    // Calculate grid dimensions
+    int rows, cols;
+    calculateGridDimensions(audioSources.empty() ? 1 : audioSources.size(), rows, cols);
 
-    // Execute FFT
-    fftw_execute(fftPlan);
+    // Calculate cell dimensions
+    float cellWidth = 2.0f / cols;
+    float cellHeight = 2.0f / rows;
 
-    // Calculate frequency bin indices for cutoff frequencies
-    const int lowBin = LOW_CUTOFF * N / 44100;
-    const int midBin = MID_CUTOFF * N / 44100;
-    const int highBin = HIGH_CUTOFF * N / 44100;
+    // Process each audio source
+    for (size_t sourceIdx = 0; sourceIdx < (audioSources.empty() ? 1 : audioSources.size()); sourceIdx++) {
+        const auto& source = audioSources.empty() ? audioData : audioSources[sourceIdx];
+        
+        if (currentPosition >= source.size())
+            continue;
 
-    // Filter and render each band
-    std::vector<float> lowBand = filterBand(fftOutputBuffer, 0, lowBin);
-    std::vector<float> midBand = filterBand(fftOutputBuffer, lowBin, midBin);
-    std::vector<float> highBand = filterBand(fftOutputBuffer, midBin, highBin);
+        // Calculate grid position
+        int row = sourceIdx / cols;
+        int col = sourceIdx % cols;
 
-    // Apply band-specific scaling factors
-    float lowScale = 2.0f;  // Boost low frequencies
-    float midScale = 1.5f;  // Moderate boost for mids
-    float highScale = 1.0f; // Normal scale for highs
+        // Calculate cell boundaries with padding
+        float padding = 0.02f;
+        float x1 = -1.0f + col * cellWidth + padding;
+        float y1 = 1.0f - (row + 1) * cellHeight + padding;
+        float x2 = x1 + cellWidth - 2 * padding;
+        float y2 = y1 + cellHeight - 2 * padding;
+        float cellCenterY = (y1 + y2) / 2.0f;
+        float effectiveHeight = (y2 - y1) / 3.0f; // Divide height by 3 for the three bands
 
-    // Render bands in their respective positions with bipolar display
-    renderBand(lowBand, -0.6f, 0.3f * lowScale, LOW_COLOR);   // Bottom band
-    renderBand(midBand, 0.0f, 0.3f * midScale, MID_COLOR);    // Middle band
-    renderBand(highBand, 0.6f, 0.3f * highScale, HIGH_COLOR); // Top band
+        // Process audio data for FFT
+        processAudioForFFT(source, currentPosition, fftInputBuffer);
+
+        // Execute FFT
+        fftw_execute(fftPlan);
+
+        // Calculate frequency bin indices for cutoff frequencies
+        const int lowBin = LOW_CUTOFF * N / 44100;
+        const int midBin = MID_CUTOFF * N / 44100;
+        const int highBin = HIGH_CUTOFF * N / 44100;
+
+        // Filter and render each band
+        std::vector<float> lowBand = filterBand(fftOutputBuffer, 0, lowBin);
+        std::vector<float> midBand = filterBand(fftOutputBuffer, lowBin, midBin);
+        std::vector<float> highBand = filterBand(fftOutputBuffer, midBin, highBin);
+
+        // Apply band-specific scaling factors
+        float lowScale = 2.0f;  // Boost low frequencies
+        float midScale = 1.5f;  // Moderate boost for mids
+        float highScale = 1.0f; // Normal scale for highs
+
+        float cellWidth = x2 - x1;
+        
+        // Render bands in their respective positions with bipolar display
+        renderBand(lowBand, cellCenterY - effectiveHeight, effectiveHeight * lowScale, x1, cellWidth, LOW_COLOR);
+        renderBand(midBand, cellCenterY, effectiveHeight * midScale, x1, cellWidth, MID_COLOR);
+        renderBand(highBand, cellCenterY + effectiveHeight, effectiveHeight * highScale, x1, cellWidth, HIGH_COLOR);
+
+        // Draw cell border
+        glLineWidth(1.0f);
+        glColor3f(0.3f, 0.3f, 0.3f);
+        glBegin(GL_LINE_LOOP);
+        glVertex2f(x1 - padding, y1 - padding);
+        glVertex2f(x2 + padding, y1 - padding);
+        glVertex2f(x2 + padding, y2 + padding);
+        glVertex2f(x1 - padding, y2 + padding);
+        glEnd();
+    }
 }
 
-void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOffset, float height, const float *color)
+void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOffset, float height, float xOffset, float width, const float *color)
 {
     glColor3fv(color);
 
@@ -112,11 +215,11 @@ void MultiBandWaveform::renderBand(const std::vector<float> &bandData, float yOf
 
     // Use 200 points across the screen for smooth rendering
     const int numPoints = 200;
-    const float pointSpacing = 2.0f / (numPoints - 1);
+    const float pointSpacing = width / (numPoints - 1);
 
     for (int i = 0; i < numPoints; i++)
     {
-        float x = -1.0f + i * pointSpacing;
+        float x = xOffset + i * pointSpacing;
 
         // Calculate average amplitude for this segment
         float sum = 0.0f;
