@@ -19,6 +19,7 @@
 #include "visualizer_factory.h"
 #include "waveform.h"  // Add this include for Waveform class
 #include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
+#include "multi_band_circle_waveform.h"  // Add this include for MultiBandCircleWaveform class
 
 // FFmpeg libraries
 extern "C"
@@ -873,6 +874,13 @@ int main(int argc, char **argv)
         MultiBandWaveform* multiBandVis = dynamic_cast<MultiBandWaveform*>(currentVisualizer.get());
         if (multiBandVis) {
             multiBandVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using multi-band circle visualizer, set the multiple audio sources
+    else if (currentVisualizerType == MULTI_BAND_CIRCLE_WAVEFORM) {
+        MultiBandCircleWaveform* circleVis = dynamic_cast<MultiBandCircleWaveform*>(currentVisualizer.get());
+        if (circleVis) {
+            circleVis->setAudioSources(multiAudioData);
         }
     }
 
