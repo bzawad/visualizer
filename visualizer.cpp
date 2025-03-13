@@ -17,9 +17,9 @@
 // Include our visualization components
 #include "visualizer_base.h"
 #include "visualizer_factory.h"
-#include "waveform.h"  // Add this include for Waveform class
-#include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
-#include "multi_band_circle_waveform.h"  // Add this include for MultiBandCircleWaveform class
+#include "waveform.h"                   // Add this include for Waveform class
+#include "multi_band_waveform.h"        // Add this include for MultiBandWaveform class
+#include "multi_band_circle_waveform.h" // Add this include for MultiBandCircleWaveform class
 #include "grid_visualizer.h"
 #include "scroller_text.h"
 
@@ -75,8 +75,8 @@ AVPacket *packet = nullptr;
 std::vector<uint8_t> frameBuffer;
 
 // Add to the top of the file with other global variables
-std::vector<std::vector<float>> multiAudioData;  // Store multiple audio sources
-std::vector<std::string> audioFilenames;         // Store filenames for multiple sources
+std::vector<std::vector<float>> multiAudioData; // Store multiple audio sources
+std::vector<std::string> audioFilenames;        // Store filenames for multiple sources
 
 // Forward declarations
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
@@ -106,23 +106,28 @@ static int paCallback(const void *inputBuffer, void *outputBuffer,
     bool allFinished = true;
 
     // Clear output buffer
-    for (unsigned long i = 0; i < framesPerBuffer; i++) {
+    for (unsigned long i = 0; i < framesPerBuffer; i++)
+    {
         out[i] = 0.0f;
     }
 
     // Mix all audio sources together
     std::lock_guard<std::mutex> lock(audioMutex);
-    for (const auto& source : multiAudioData) {
-        for (unsigned long i = 0; i < framesPerBuffer; i++) {
-            if (position + i < source.size()) {
+    for (const auto &source : multiAudioData)
+    {
+        for (unsigned long i = 0; i < framesPerBuffer; i++)
+        {
+            if (position + i < source.size())
+            {
                 // Mix audio with equal weighting (1/number of sources)
                 out[i] += source[position + i] / static_cast<float>(multiAudioData.size());
-                
+
                 // If we have enough samples, update FFT input
-                if (i < N) {
+                if (i < N)
+                {
                     in[i] = static_cast<double>(out[i]);
                 }
-                
+
                 allFinished = false;
             }
         }
@@ -531,13 +536,15 @@ void encodeAudioForFrame(int frameIndex)
             float *audioFrameDataRight = (float *)audioFrame->data[1]; // Right channel
 
             // Clear the audio frame buffers
-            for (int i = 0; i < frameSize; i++) {
+            for (int i = 0; i < frameSize; i++)
+            {
                 audioFrameDataLeft[i] = 0.0f;
                 audioFrameDataRight[i] = 0.0f;
             }
 
             // Mix all audio sources together
-            for (const auto& source : multiAudioData) {
+            for (const auto &source : multiAudioData)
+            {
                 for (int i = 0; i < frameSize; i++)
                 {
                     int64_t samplePos = pos + i;
@@ -557,12 +564,14 @@ void encodeAudioForFrame(int frameIndex)
             float *audioFrameData = (float *)audioFrame->data[0];
 
             // Clear the audio frame buffer
-            for (int i = 0; i < frameSize; i++) {
+            for (int i = 0; i < frameSize; i++)
+            {
                 audioFrameData[i] = 0.0f;
             }
 
             // Mix all audio sources together
-            for (const auto& source : multiAudioData) {
+            for (const auto &source : multiAudioData)
+            {
                 for (int i = 0; i < frameSize; i++)
                 {
                     int64_t samplePos = pos + i;
@@ -635,8 +644,9 @@ bool loadWavFile(const std::string &filename)
     std::cout << "Frames: " << sfInfo.frames << std::endl;
 
     // Check sample rate compatibility
-    if (sfInfo.samplerate != SAMPLE_RATE) {
-        std::cerr << "Warning: Sample rate mismatch. Expected " << SAMPLE_RATE 
+    if (sfInfo.samplerate != SAMPLE_RATE)
+    {
+        std::cerr << "Warning: Sample rate mismatch. Expected " << SAMPLE_RATE
                   << " Hz, got " << sfInfo.samplerate << " Hz" << std::endl;
         sf_close(sndFile);
         return false;
@@ -647,13 +657,15 @@ bool loadWavFile(const std::string &filename)
 
     // Create a new vector for this audio file's data
     std::vector<float> newAudioData;
-    
+
     // Store original audio data
-    if (sfInfo.channels > 1) {
+    if (sfInfo.channels > 1)
+    {
         // For stereo/multi-channel, store the original data as interleaved
         std::vector<float> originalData(sfInfo.frames * sfInfo.channels);
         sf_count_t count = sf_read_float(sndFile, originalData.data(), originalData.size());
-        if (count != sfInfo.frames * sfInfo.channels) {
+        if (count != sfInfo.frames * sfInfo.channels)
+        {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
@@ -662,18 +674,23 @@ bool loadWavFile(const std::string &filename)
         // Convert multi-channel to mono by averaging all channels
         std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
         newAudioData.resize(sfInfo.frames);
-        for (sf_count_t i = 0; i < sfInfo.frames; i++) {
+        for (sf_count_t i = 0; i < sfInfo.frames; i++)
+        {
             float sum = 0.0f;
-            for (int ch = 0; ch < sfInfo.channels; ch++) {
+            for (int ch = 0; ch < sfInfo.channels; ch++)
+            {
                 sum += originalData[i * sfInfo.channels + ch];
             }
             newAudioData[i] = sum / sfInfo.channels;
         }
-    } else {
+    }
+    else
+    {
         // Mono file - read directly
         newAudioData.resize(sfInfo.frames);
         sf_count_t count = sf_read_float(sndFile, newAudioData.data(), newAudioData.size());
-        if (count != sfInfo.frames) {
+        if (count != sfInfo.frames)
+        {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
@@ -688,14 +705,18 @@ bool loadWavFile(const std::string &filename)
 
     // Find the longest audio file length
     size_t maxLength = 0;
-    for (const auto& source : multiAudioData) {
+    for (const auto &source : multiAudioData)
+    {
         maxLength = std::max(maxLength, source.size());
     }
 
     // Pad shorter audio files with silence to match the longest one
-    if (maxLength > 0) {
-        for (auto& source : multiAudioData) {
-            if (source.size() < maxLength) {
+    if (maxLength > 0)
+    {
+        for (auto &source : multiAudioData)
+        {
+            if (source.size() < maxLength)
+            {
                 std::cout << "Padding audio file with silence to match longest file length" << std::endl;
                 source.resize(maxLength, 0.0f);
             }
@@ -703,7 +724,8 @@ bool loadWavFile(const std::string &filename)
     }
 
     // For backward compatibility, keep the first audio file in the original audioData vector
-    if (multiAudioData.size() == 1) {
+    if (multiAudioData.size() == 1)
+    {
         audioData = multiAudioData[0];
         originalAudioData = multiAudioData[0];
     }
@@ -756,6 +778,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = CUBE;
             break;
         case CUBE:
+            currentVisualizerType = RACER;
+            break;
+        case RACER:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -808,27 +833,34 @@ int main(int argc, char **argv)
 
     // Parse command line arguments
     std::vector<std::string> wavFiles;
-    
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
+
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc)
+        {
             visualizerTypeName = argv[i + 1];
             i++; // Skip the next argument
-        } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
+        }
+        else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc)
+        {
             recordVideo = true;
             outputVideoFile = argv[i + 1];
             i++; // Skip the next argument
-        } else {
+        }
+        else
+        {
             // Collect all WAV files
             wavFiles.push_back(argv[i]);
         }
     }
 
-    if (wavFiles.empty()) {
+    if (wavFiles.empty())
+    {
         std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
                   << "Options:\n"
                   << "  --type <type>       Visualization type (default: bars)\n"
                   << "                      Available types: bars, waveform, multiband, ascii,\n"
-                  << "                                      spectrogram, circle, terrain\n"
+                  << "                                      spectrogram, circle, terrain, cube, scroller\n"
                   << "  --record <file>     Record visualization to video file\n"
                   << "\n"
                   << "For waveform visualization, you can provide up to 8 WAV files.\n"
@@ -849,25 +881,44 @@ int main(int argc, char **argv)
     currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
 
     // Get the visualizer type from the name
-    if (visualizerTypeName == "waveform") {
+    if (visualizerTypeName == "waveform")
+    {
         currentVisualizerType = WAVEFORM;
-    } else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band") {
+    }
+    else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band")
+    {
         currentVisualizerType = MULTI_BAND_WAVEFORM;
-    } else if (visualizerTypeName == "ascii") {
+    }
+    else if (visualizerTypeName == "ascii")
+    {
         currentVisualizerType = ASCII_BAR_EQUALIZER;
-    } else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum") {
+    }
+    else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
+    {
         currentVisualizerType = SPECTROGRAM;
-    } else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle") {
+    }
+    else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
+    {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
-    } else if (visualizerTypeName == "terrain" || visualizerTypeName == "3d" || visualizerTypeName == "terrain3d" || visualizerTypeName == "3d_terrain") {
+    }
+    else if (visualizerTypeName == "terrain" || visualizerTypeName == "3d" || visualizerTypeName == "terrain3d" || visualizerTypeName == "3d_terrain")
+    {
         currentVisualizerType = TERRAIN_VISUALIZER_3D;
-    } else if (visualizerTypeName == "grid") {
+    }
+    else if (visualizerTypeName == "grid")
+    {
         currentVisualizerType = GRID_VISUALIZER;
-    } else if (visualizerTypeName == "scroller" || visualizerTypeName == "text" || visualizerTypeName == "scroll") {
+    }
+    else if (visualizerTypeName == "scroller" || visualizerTypeName == "text" || visualizerTypeName == "scroll")
+    {
         currentVisualizerType = SCROLLER;
-    } else if (visualizerTypeName == "cube" || visualizerTypeName == "3d_cube") {
+    }
+    else if (visualizerTypeName == "cube" || visualizerTypeName == "3d_cube")
+    {
         currentVisualizerType = CUBE;
-    } else {
+    }
+    else
+    {
         currentVisualizerType = BAR_EQUALIZER;
     }
 
@@ -875,37 +926,47 @@ int main(int argc, char **argv)
 
     // Load all WAV files (up to 9)
     size_t maxFiles = std::min(wavFiles.size(), size_t(9));
-    for (size_t i = 0; i < maxFiles; i++) {
-        if (!loadWavFile(wavFiles[i])) {
+    for (size_t i = 0; i < maxFiles; i++)
+    {
+        if (!loadWavFile(wavFiles[i]))
+        {
             return -1;
         }
     }
 
     // If using waveform visualizer, set the multiple audio sources
-    if (currentVisualizerType == WAVEFORM) {
-        Waveform* waveformVis = dynamic_cast<Waveform*>(currentVisualizer.get());
-        if (waveformVis) {
+    if (currentVisualizerType == WAVEFORM)
+    {
+        Waveform *waveformVis = dynamic_cast<Waveform *>(currentVisualizer.get());
+        if (waveformVis)
+        {
             waveformVis->setAudioSources(multiAudioData);
         }
     }
     // If using multi-band waveform visualizer, set the multiple audio sources
-    else if (currentVisualizerType == MULTI_BAND_WAVEFORM) {
-        MultiBandWaveform* multiBandVis = dynamic_cast<MultiBandWaveform*>(currentVisualizer.get());
-        if (multiBandVis) {
+    else if (currentVisualizerType == MULTI_BAND_WAVEFORM)
+    {
+        MultiBandWaveform *multiBandVis = dynamic_cast<MultiBandWaveform *>(currentVisualizer.get());
+        if (multiBandVis)
+        {
             multiBandVis->setAudioSources(multiAudioData);
         }
     }
     // If using multi-band circle visualizer, set the multiple audio sources
-    else if (currentVisualizerType == MULTI_BAND_CIRCLE_WAVEFORM) {
-        MultiBandCircleWaveform* circleVis = dynamic_cast<MultiBandCircleWaveform*>(currentVisualizer.get());
-        if (circleVis) {
+    else if (currentVisualizerType == MULTI_BAND_CIRCLE_WAVEFORM)
+    {
+        MultiBandCircleWaveform *circleVis = dynamic_cast<MultiBandCircleWaveform *>(currentVisualizer.get());
+        if (circleVis)
+        {
             circleVis->setAudioSources(multiAudioData);
         }
     }
     // If using grid visualizer, set the multiple audio sources
-    else if (currentVisualizerType == GRID_VISUALIZER) {
-        GridVisualizer* gridVis = dynamic_cast<GridVisualizer*>(currentVisualizer.get());
-        if (gridVis) {
+    else if (currentVisualizerType == GRID_VISUALIZER)
+    {
+        GridVisualizer *gridVis = dynamic_cast<GridVisualizer *>(currentVisualizer.get());
+        if (gridVis)
+        {
             gridVis->setAudioSources(multiAudioData);
         }
     }
@@ -1175,33 +1236,38 @@ int main(int argc, char **argv)
     return 0;
 }
 
-Visualizer::Visualizer() {
+Visualizer::Visualizer()
+{
     screenWidth = 800;
     screenHeight = 600;
 }
 
-Visualizer::~Visualizer() {
+Visualizer::~Visualizer()
+{
 }
 
-void Visualizer::initialize(int width, int height) {
+void Visualizer::initialize(int width, int height)
+{
     screenWidth = width;
     screenHeight = height;
 }
 
-void Visualizer::renderFrame(const std::vector<std::vector<float>>& audioSources,
-                           double* in,
-                           fftw_complex* out,
-                           fftw_plan& plan,
-                           float timeSeconds) {
+void Visualizer::renderFrame(const std::vector<std::vector<float>> &audioSources,
+                             double *in,
+                             fftw_complex *out,
+                             fftw_plan &plan,
+                             float timeSeconds)
+{
     // Default implementation for backward compatibility
     renderFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, timeSeconds);
 }
 
-void Visualizer::renderLiveFrame(const std::vector<std::vector<float>>& audioSources,
-                               double* in,
-                               fftw_complex* out,
-                               fftw_plan& plan,
-                               size_t currentPosition) {
+void Visualizer::renderLiveFrame(const std::vector<std::vector<float>> &audioSources,
+                                 double *in,
+                                 fftw_complex *out,
+                                 fftw_plan &plan,
+                                 size_t currentPosition)
+{
     // Default implementation for backward compatibility
     renderLiveFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, currentPosition);
 }

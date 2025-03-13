@@ -9,6 +9,7 @@
 #include "grid_visualizer.h"
 #include "scroller_text.h"
 #include "cube_visualizer.h"
+#include "racer_visualizer.h"
 #include <algorithm>
 #include <cctype>
 
@@ -36,6 +37,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<ScrollerText>();
     case CUBE:
         return std::make_shared<CubeVisualizer>();
+    case RACER:
+        return std::make_shared<RacerVisualizer>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -89,6 +92,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(CUBE);
     }
+    else if (lowerName == "racer" || lowerName == "synthwave" || lowerName == "race")
+    {
+        return createVisualizer(RACER);
+    }
     else
     {
         // Default to bar equalizer
@@ -120,6 +127,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Scroller Text";
     case CUBE:
         return "3D Cube Visualizer";
+    case RACER:
+        return "Synthwave Racer";
     default:
         return "Unknown";
     }

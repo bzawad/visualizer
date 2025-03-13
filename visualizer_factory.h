@@ -1,9 +1,11 @@
+#pragma once
 #ifndef VISUALIZER_FACTORY_H
 #define VISUALIZER_FACTORY_H
 
 #include "visualizer_base.h"
 #include <memory>
 #include <string>
+#include "racer_visualizer.h"
 
 enum VisualizerType
 {
@@ -16,7 +18,8 @@ enum VisualizerType
     TERRAIN_VISUALIZER_3D,
     GRID_VISUALIZER,
     SCROLLER,
-    CUBE
+    CUBE,
+    RACER
 };
 
 class VisualizerFactory
