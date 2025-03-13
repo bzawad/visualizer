@@ -49,11 +49,12 @@ private:
     
     // Rendering parameters
     static constexpr float LINE_WIDTH = 5.0f;
-    static constexpr float BASE_ROTATION_SPEED = 3.0f;
-    static constexpr float MAX_ROTATION_SPEED = 12.0f;
+    static constexpr float BASE_ROTATION_SPEED = 9.0f;     // Increased from 3.0f
+    static constexpr float MAX_ROTATION_SPEED = 18.0f;     // Increased proportionally
     static constexpr float BASE_SCALE = 0.8f;
-    static constexpr float MAX_SCALE = 1.5f;
-    static constexpr float BOUNCE_FACTOR = 1.2f;
+    static constexpr float MAX_SCALE = 1.2f;
+    static constexpr float BOUNCE_FACTOR = 1.8f;           // Increased from 0.6f (3x)
+    static constexpr float SMOOTHING_FACTOR = 0.15f;       // Keeping smooth interpolation
     
     // Audio analysis parameters
     static constexpr int PITCH_START_BIN = 5;
@@ -62,4 +63,5 @@ private:
     static constexpr int AMPLITUDE_END_BIN = 8;
     
     float aspectRatio;
+    float lastAmplitude = 0.0f;  // Store last amplitude for smoothing
 }; 

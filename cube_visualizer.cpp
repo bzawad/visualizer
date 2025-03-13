@@ -79,7 +79,7 @@ void CubeVisualizer::render(float time, const std::vector<float>& magnitudes) {
     float rotationSpeed = BASE_ROTATION_SPEED + pitchMagnitude * (MAX_ROTATION_SPEED - BASE_ROTATION_SPEED);
     
     // Calculate amplitude-based bounce (using lower frequencies for punch)
-    float amplitudeMagnitude = 0.0f;
+    float currentAmplitude = 0.0f;
     float peakMagnitude = 0.0f;
     
     // First pass: find peak magnitude for normalization
@@ -92,12 +92,16 @@ void CubeVisualizer::render(float time, const std::vector<float>& magnitudes) {
     if (peakMagnitude > 0.0f) {
         for (size_t i = AMPLITUDE_START_BIN; i < ampEndBin; i++) {
             float normalizedMag = magnitudes[i] / peakMagnitude;
-            amplitudeMagnitude += normalizedMag * normalizedMag * 4.0f; // Square for more emphasis on peaks
+            currentAmplitude += normalizedMag * normalizedMag * 2.0f; // Reduced from 4.0f for smoother response
         }
-        amplitudeMagnitude /= (AMPLITUDE_END_BIN - AMPLITUDE_START_BIN);
+        currentAmplitude /= (AMPLITUDE_END_BIN - AMPLITUDE_START_BIN);
     }
     
-    float scale = BASE_SCALE + amplitudeMagnitude * BOUNCE_FACTOR;
+    // Apply smoothing between current and last amplitude
+    float smoothedAmplitude = lastAmplitude + SMOOTHING_FACTOR * (currentAmplitude - lastAmplitude);
+    lastAmplitude = smoothedAmplitude;  // Store for next frame
+    
+    float scale = BASE_SCALE + smoothedAmplitude * BOUNCE_FACTOR;
     
     // Set up perspective projection
     glMatrixMode(GL_PROJECTION);
@@ -149,14 +153,11 @@ void CubeVisualizer::drawCube(float rotationAngle, float scale) {
     // Scale uniformly
     glScalef(scale, scale, scale);
     
-    // Draw the cube edges with a metallic color gradient
+    // Draw the cube edges in pure white
     glBegin(GL_LINES);
     for (size_t i = 0; i < edges.size(); i += 2) {
-        // Calculate color based on position (gradient from silver to bright cyan)
-        float colorPos = static_cast<float>(i) / edges.size();
-        float brightness = 0.8f + colorPos * 0.2f;
-        // Make the color more vibrant
-        glColor3f(brightness * 0.7f, brightness * 1.0f, brightness);
+        // Set color to pure white
+        glColor3f(1.0f, 1.0f, 1.0f);
         
         // Get vertex indices for this edge
         int v1 = edges[i];
