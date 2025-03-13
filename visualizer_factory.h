@@ -15,7 +15,8 @@ enum VisualizerType
     MULTI_BAND_CIRCLE_WAVEFORM,
     TERRAIN_VISUALIZER_3D,
     GRID_VISUALIZER,
-    SCROLLER
+    SCROLLER,
+    CUBE
 };
 
 class VisualizerFactory

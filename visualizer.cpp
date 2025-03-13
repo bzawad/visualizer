@@ -753,6 +753,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = SCROLLER;
             break;
         case SCROLLER:
+            currentVisualizerType = CUBE;
+            break;
+        case CUBE:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -856,8 +859,14 @@ int main(int argc, char **argv)
         currentVisualizerType = SPECTROGRAM;
     } else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle") {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
+    } else if (visualizerTypeName == "terrain" || visualizerTypeName == "3d" || visualizerTypeName == "terrain3d" || visualizerTypeName == "3d_terrain") {
+        currentVisualizerType = TERRAIN_VISUALIZER_3D;
     } else if (visualizerTypeName == "grid") {
         currentVisualizerType = GRID_VISUALIZER;
+    } else if (visualizerTypeName == "scroller" || visualizerTypeName == "text" || visualizerTypeName == "scroll") {
+        currentVisualizerType = SCROLLER;
+    } else if (visualizerTypeName == "cube" || visualizerTypeName == "3d_cube") {
+        currentVisualizerType = CUBE;
     } else {
         currentVisualizerType = BAR_EQUALIZER;
     }
