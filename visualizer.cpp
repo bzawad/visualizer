@@ -17,6 +17,7 @@
 // Include our visualization components
 #include "visualizer_base.h"
 #include "visualizer_factory.h"
+#include "waveform.h"  // Add this include for Waveform class
 
 // FFmpeg libraries
 extern "C"
@@ -68,6 +69,10 @@ AVFrame *rgbFrame = nullptr;
 AVFrame *audioFrame = nullptr;
 AVPacket *packet = nullptr;
 std::vector<uint8_t> frameBuffer;
+
+// Add to the top of the file with other global variables
+std::vector<std::vector<float>> multiAudioData;  // Store multiple audio sources
+std::vector<std::string> audioFilenames;         // Store filenames for multiple sources
 
 // Forward declarations
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
@@ -618,14 +623,15 @@ bool loadWavFile(const std::string &filename)
     // Store the original channel count
     originalChannels = sfInfo.channels;
 
+    // Create a new vector for this audio file's data
+    std::vector<float> newAudioData;
+    
     // Store original audio data
-    if (sfInfo.channels > 1)
-    {
+    if (sfInfo.channels > 1) {
         // For stereo/multi-channel, store the original data as interleaved
-        originalAudioData.resize(sfInfo.frames * sfInfo.channels);
-        sf_count_t count = sf_read_float(sndFile, originalAudioData.data(), originalAudioData.size());
-        if (count != sfInfo.frames * sfInfo.channels)
-        {
+        std::vector<float> originalData(sfInfo.frames * sfInfo.channels);
+        sf_count_t count = sf_read_float(sndFile, originalData.data(), originalData.size());
+        if (count != sfInfo.frames * sfInfo.channels) {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
@@ -635,29 +641,21 @@ bool loadWavFile(const std::string &filename)
         std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
 
         // Resize our mono audio buffer
-        audioData.resize(sfInfo.frames);
+        newAudioData.resize(sfInfo.frames);
 
         // Convert multi-channel to mono by averaging all channels
-        for (sf_count_t i = 0; i < sfInfo.frames; i++)
-        {
+        for (sf_count_t i = 0; i < sfInfo.frames; i++) {
             float sum = 0.0f;
-            for (int ch = 0; ch < sfInfo.channels; ch++)
-            {
-                sum += originalAudioData[i * sfInfo.channels + ch];
+            for (int ch = 0; ch < sfInfo.channels; ch++) {
+                sum += originalData[i * sfInfo.channels + ch];
             }
-            audioData[i] = sum / sfInfo.channels;
+            newAudioData[i] = sum / sfInfo.channels;
         }
-    }
-    else
-    {
-        // Mono file - store both original and visualization data the same
-        audioData.resize(sfInfo.frames);
-        originalAudioData = audioData; // Share the same data for mono
-
-        // Read the entire file
-        sf_count_t count = sf_read_float(sndFile, audioData.data(), audioData.size());
-        if (count != sfInfo.frames)
-        {
+    } else {
+        // Mono file - read directly
+        newAudioData.resize(sfInfo.frames);
+        sf_count_t count = sf_read_float(sndFile, newAudioData.data(), newAudioData.size());
+        if (count != sfInfo.frames) {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
@@ -665,6 +663,17 @@ bool loadWavFile(const std::string &filename)
     }
 
     sf_close(sndFile);
+
+    // Store the filename and audio data
+    audioFilenames.push_back(filename);
+    multiAudioData.push_back(newAudioData);
+
+    // For backward compatibility, keep the first audio file in the original audioData vector
+    if (multiAudioData.size() == 1) {
+        audioData = newAudioData;
+        originalAudioData = newAudioData;
+    }
+
     return true;
 }
 
@@ -752,32 +761,44 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height)
 // Main function
 int main(int argc, char **argv)
 {
-    std::string wavFile;
     std::string visualizerTypeName = "bars"; // Default
 
     // Parse command line arguments
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc)
-        {
+    std::vector<std::string> wavFiles;
+    
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
             visualizerTypeName = argv[i + 1];
             i++; // Skip the next argument
-        }
-        else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc)
-        {
+        } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
             recordVideo = true;
             outputVideoFile = argv[i + 1];
             i++; // Skip the next argument
-        }
-        else
-        {
-            wavFile = argv[i];
+        } else {
+            // Collect all WAV files
+            wavFiles.push_back(argv[i]);
         }
     }
 
-    if (wavFile.empty())
-    {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram|circle|terrain] [--record output.mp4] <wav_file>" << std::endl;
+    if (wavFiles.empty()) {
+        std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
+                  << "Options:\n"
+                  << "  --type <type>       Visualization type (default: bars)\n"
+                  << "                      Available types: bars, waveform, multiband, ascii,\n"
+                  << "                                      spectrogram, circle, terrain\n"
+                  << "  --record <file>     Record visualization to video file\n"
+                  << "\n"
+                  << "For waveform visualization, you can provide up to 8 WAV files.\n"
+                  << "The files will be arranged in a grid layout:\n"
+                  << "  1 file:   1x1 grid\n"
+                  << "  2 files:  1x2 grid\n"
+                  << "  3-4 files: 2x2 grid\n"
+                  << "  5-6 files: 2x3 grid\n"
+                  << "  7-8 files: 2x4 grid\n"
+                  << "\n"
+                  << "Example:\n"
+                  << "  " << argv[0] << " --type waveform song1.wav song2.wav song3.wav\n"
+                  << std::endl;
         return -1;
     }
 
@@ -785,37 +806,36 @@ int main(int argc, char **argv)
     currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
 
     // Get the visualizer type from the name
-    if (visualizerTypeName == "waveform")
-    {
+    if (visualizerTypeName == "waveform") {
         currentVisualizerType = WAVEFORM;
-    }
-    else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band")
-    {
+    } else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band") {
         currentVisualizerType = MULTI_BAND_WAVEFORM;
-    }
-    else if (visualizerTypeName == "ascii")
-    {
+    } else if (visualizerTypeName == "ascii") {
         currentVisualizerType = ASCII_BAR_EQUALIZER;
-    }
-    else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
-    {
+    } else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum") {
         currentVisualizerType = SPECTROGRAM;
-    }
-    else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
-    {
+    } else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle") {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
-    }
-    else
-    {
+    } else {
         currentVisualizerType = BAR_EQUALIZER;
     }
 
     std::cout << "Using " << VisualizerFactory::getVisualizerName(currentVisualizerType) << " visualization" << std::endl;
 
-    // Load WAV file
-    if (!loadWavFile(wavFile))
-    {
-        return -1;
+    // Load all WAV files (up to 8)
+    size_t maxFiles = std::min(wavFiles.size(), size_t(8));
+    for (size_t i = 0; i < maxFiles; i++) {
+        if (!loadWavFile(wavFiles[i])) {
+            return -1;
+        }
+    }
+
+    // If using waveform visualizer, set the multiple audio sources
+    if (currentVisualizerType == WAVEFORM) {
+        Waveform* waveformVis = dynamic_cast<Waveform*>(currentVisualizer.get());
+        if (waveformVis) {
+            waveformVis->setAudioSources(multiAudioData);
+        }
     }
 
     // Calculate total number of frames based on audio length
