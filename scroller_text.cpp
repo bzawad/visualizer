@@ -63,7 +63,7 @@ void ScrollerText::render(float time, const std::vector<float>& magnitudes) {
     }
     
     // Apply bounce effect based on audio magnitude
-    float bounce = avgMagnitude * 0.4f; // Increased bounce effect
+    float bounce = avgMagnitude * 5.0f; // Significantly increased bounce effect
     
     // Enable blending for smooth metallic effect
     glEnable(GL_BLEND);
@@ -85,15 +85,17 @@ void ScrollerText::renderMetallicText(const char* text, float time, float bounce
         
         // Calculate y position using a more aggressive sine wave
         float wavePhase = charX * 2.0f + time * SINE_FREQUENCY;
-        float letterY = sin(wavePhase) * SINE_AMPLITUDE * 0.8f;
+        float letterY = sin(wavePhase) * SINE_AMPLITUDE * (1.0f + bounce);
         
         // Add individual letter bounce based on audio
-        letterY += bounce * sin(charX * 3.0f);
+        letterY += bounce * sin(charX * 5.0f + time * 10.0f); // Faster oscillation
         
         // Only render if the letter is within visible range (-1.5 to 1.5)
         if (charX > -1.5f && charX < 1.5f) {
             if (*c != ' ') {  // Skip rendering for spaces but maintain spacing
-                renderCharacter(*c, charX, letterY, 0.12f);
+                // Scale letters based on audio intensity
+                float scale = 0.12f * (1.0f + bounce * 0.5f);
+                renderCharacter(*c, charX, letterY, scale);
             }
         }
     }
