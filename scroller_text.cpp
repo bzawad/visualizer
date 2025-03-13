@@ -15,6 +15,10 @@ void ScrollerText::renderFrame(const std::vector<float>& audioData,
                              fftw_complex* out,
                              fftw_plan& plan,
                              float timeSeconds) {
+    (void)audioData;  // Mark as intentionally unused
+    (void)in;         // Mark as intentionally unused
+    (void)plan;       // Mark as intentionally unused
+    
     // Calculate magnitudes for audio reactivity
     std::vector<float> magnitudes(N/2);
     for (int i = 0; i < N/2; i++) {
@@ -29,6 +33,10 @@ void ScrollerText::renderLiveFrame(const std::vector<float>& audioData,
                                  fftw_complex* out,
                                  fftw_plan& plan,
                                  size_t currentPosition) {
+    (void)audioData;  // Mark as intentionally unused
+    (void)in;         // Mark as intentionally unused
+    (void)plan;       // Mark as intentionally unused
+    
     // Calculate magnitudes for audio reactivity
     std::vector<float> magnitudes(N/2);
     for (int i = 0; i < N/2; i++) {
@@ -41,7 +49,7 @@ void ScrollerText::renderLiveFrame(const std::vector<float>& audioData,
 
 void ScrollerText::render(float time, const std::vector<float>& magnitudes) {
     // Update scroll position
-    scrollPosition = fmod(scrollPosition + SCROLL_SPEED * 0.01f, 2.0f);
+    scrollPosition = fmod(scrollPosition + SCROLL_SPEED * 0.02f, 2.0f);
     
     // Calculate audio reactivity
     float avgMagnitude = 0.0f;
@@ -68,7 +76,7 @@ void ScrollerText::render(float time, const std::vector<float>& magnitudes) {
 }
 
 void ScrollerText::renderMetallicText(const char* text, float time, float bounce) {
-    float letterSpacing = 0.3f; // Reduced from 0.6f to 0.3f (50% closer)
+    float letterSpacing = 0.3f;
     float baseX = 1.0f - scrollPosition * 2.0f; // Start from right, move left
     
     // For each character in the text
@@ -76,16 +84,17 @@ void ScrollerText::renderMetallicText(const char* text, float time, float bounce
         float charX = baseX + (c - text) * letterSpacing;
         
         // Calculate y position using a more aggressive sine wave
-        // Each letter's position in the wave depends on its x position and time
         float wavePhase = charX * 2.0f + time * SINE_FREQUENCY;
-        float letterY = sin(wavePhase) * SINE_AMPLITUDE * 0.4f;
+        float letterY = sin(wavePhase) * SINE_AMPLITUDE * 0.8f;
         
         // Add individual letter bounce based on audio
         letterY += bounce * sin(charX * 3.0f);
         
         // Only render if the letter is within visible range (-1.5 to 1.5)
         if (charX > -1.5f && charX < 1.5f) {
-            renderCharacter(*c, charX, letterY, 0.12f); // Slightly smaller letters to match new spacing
+            if (*c != ' ') {  // Skip rendering for spaces but maintain spacing
+                renderCharacter(*c, charX, letterY, 0.12f);
+            }
         }
     }
 }
@@ -95,8 +104,8 @@ void ScrollerText::renderCharacter(char c, float x, float y, float scale) {
     switch (c) {
         case 'T':
             renderStroke({
-                {-0.4f, 1.0f}, {0.4f, 1.0f},   // Top horizontal
-                {0.0f, 1.0f}, {0.0f, 0.0f}    // Vertical
+                {-0.35f, 1.0f}, {0.35f, 1.0f},  // Top horizontal
+                {0.0f, 1.0f}, {0.0f, 0.0f}      // Vertical
             }, x, y, scale);
             break;
         case 'o':
@@ -104,17 +113,17 @@ void ScrollerText::renderCharacter(char c, float x, float y, float scale) {
             break;
         case 'n':
             renderStroke({
-                {-0.4f, 0.0f}, {-0.4f, 1.0f},  // Left vertical
-                {-0.4f, 1.0f}, {0.4f, 0.0f},   // Diagonal
-                {0.4f, 0.0f}, {0.4f, 1.0f}     // Right vertical
+                {-0.3f, 0.0f}, {-0.3f, 1.0f},    // Left vertical
+                {-0.3f, 1.0f}, {0.3f, 0.0f},     // Diagonal
+                {0.3f, 0.0f}, {0.3f, 1.0f}       // Right vertical
             }, x, y, scale);
             break;
         case 'e':
             renderStroke({
-                {-0.4f, 0.0f}, {-0.4f, 1.0f},  // Left vertical
-                {-0.4f, 0.0f}, {0.4f, 0.0f},   // Bottom horizontal
-                {-0.4f, 0.5f}, {0.3f, 0.5f},   // Middle horizontal
-                {-0.4f, 1.0f}, {0.4f, 1.0f}    // Top horizontal
+                {-0.3f, 0.0f}, {-0.3f, 1.0f},    // Left vertical
+                {-0.3f, 0.0f}, {0.25f, 0.0f},    // Bottom horizontal
+                {-0.3f, 0.5f}, {0.2f, 0.5f},     // Middle horizontal (slightly shorter)
+                {-0.3f, 1.0f}, {0.25f, 1.0f}     // Top horizontal
             }, x, y, scale);
             break;
         case 'C':
@@ -122,17 +131,17 @@ void ScrollerText::renderCharacter(char c, float x, float y, float scale) {
             break;
         case 'd':
             renderStroke({
-                {0.4f, 0.0f}, {0.4f, 1.0f}     // Right vertical
+                {0.3f, 0.0f}, {0.3f, 1.0f}      // Right vertical
             }, x, y, scale);
             renderArc(x + scale * 0.0f, y + scale * 0.5f, scale * 0.3f, 0, M_PI * 2);
             break;
         case 'r':
             renderStroke({
-                {-0.4f, 0.0f}, {-0.4f, 1.0f},  // Left vertical
-                {-0.4f, 1.0f}, {0.3f, 1.0f},   // Top horizontal
-                {0.3f, 1.0f}, {0.3f, 0.5f},    // Right vertical
-                {0.3f, 0.5f}, {-0.4f, 0.5f},   // Middle horizontal
-                {-0.4f, 0.5f}, {0.3f, 0.0f}    // Diagonal
+                {-0.3f, 0.0f}, {-0.3f, 1.0f},    // Left vertical
+                {-0.3f, 1.0f}, {0.25f, 1.0f},    // Top horizontal
+                {0.25f, 1.0f}, {0.25f, 0.5f},    // Right vertical
+                {0.25f, 0.5f}, {-0.3f, 0.5f},    // Middle horizontal
+                {-0.3f, 0.5f}, {0.25f, 0.0f}     // Diagonal
             }, x, y, scale);
             break;
         default:
@@ -160,8 +169,10 @@ void ScrollerText::renderStroke(const std::vector<std::pair<float, float>>& poin
             float x2 = x + points[j+1].first * scale;
             float y2 = y + points[j+1].second * scale;
             
-            glVertex2f(x1, y1 + i * scale * 0.25f);
-            glVertex2f(x2, y2 + i * scale * 0.25f);
+            // Offset each layer slightly upward and to the right for metallic effect
+            float offset = i * scale * 0.05f;  // Reduced from 0.25f to 0.05f
+            glVertex2f(x1 + offset, y1 + offset);
+            glVertex2f(x2 + offset, y2 + offset);
         }
         glEnd();
     }

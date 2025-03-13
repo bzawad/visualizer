@@ -750,6 +750,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = GRID_VISUALIZER;
             break;
         case GRID_VISUALIZER:
+            currentVisualizerType = SCROLLER;
+            break;
+        case SCROLLER:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
