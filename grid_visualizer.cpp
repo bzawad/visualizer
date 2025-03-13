@@ -56,7 +56,7 @@ void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, f
     float logMaxFreq = log10(MAX_FREQ);
     float logRange = logMaxFreq - logMinFreq;
     
-    // Map FFT bins to grid cells
+    // Map FFT bins to grid cells with increased responsiveness
     for (int i = 1; i < N/2; i++) {
         float freq = i * SAMPLE_RATE / (float)N;
         if (freq < MIN_FREQ || freq > MAX_FREQ) continue;
@@ -67,9 +67,9 @@ void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, f
         // Map frequency to X coordinate (left to right = low to high frequency)
         int gridX = static_cast<int>(normalizedFreq * GRID_SIZE);
         
-        // Get magnitude and normalize it
+        // Get magnitude and normalize it with increased responsiveness
         float magnitude = magnitudes[i];
-        float normalizedMagnitude = std::min(1.0f, magnitude * 20.0f);  // Increased amplification
+        float normalizedMagnitude = std::min(1.0f, magnitude * 25.0f);  // Increased from 20.0f for more responsiveness
         
         // Fill the entire column up to the magnitude level
         if (gridX >= 0 && gridX < GRID_SIZE) {
@@ -99,14 +99,14 @@ void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, f
         }
     }
     
-    // Render grid cells
+    // Render grid cells with increased brightness
     glBegin(GL_QUADS);
     for (int y = 0; y < GRID_SIZE; y++) {
         for (int x = 0; x < GRID_SIZE; x++) {
             float value = smoothedValues[y * GRID_SIZE + x];
             
-            // Use black to white color scheme
-            float brightness = value;
+            // Increase brightness by 1.25x while ensuring we don't exceed 1.0
+            float brightness = std::min(1.0f, value * 1.25f);
             glColor3f(brightness, brightness, brightness);
             
             float cellX = x1 + x * cellWidth;
