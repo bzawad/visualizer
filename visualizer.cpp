@@ -745,6 +745,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = TERRAIN_VISUALIZER_3D;
             break;
         case TERRAIN_VISUALIZER_3D:
+            currentVisualizerType = GRID_VISUALIZER;
+            break;
+        case GRID_VISUALIZER:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
