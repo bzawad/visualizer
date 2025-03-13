@@ -8,6 +8,7 @@
 #include "terrain_visualizer_3d.h"
 #include "grid_visualizer.h"
 #include "scroller_text.h"
+#include "cube_visualizer.h"
 #include <algorithm>
 #include <cctype>
 
@@ -33,6 +34,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<GridVisualizer>();
     case SCROLLER:
         return std::make_shared<ScrollerText>();
+    case CUBE:
+        return std::make_shared<CubeVisualizer>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -82,6 +85,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(SCROLLER);
     }
+    else if (lowerName == "cube" || lowerName == "3d_cube")
+    {
+        return createVisualizer(CUBE);
+    }
     else
     {
         // Default to bar equalizer
@@ -111,6 +118,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Grid Visualizer";
     case SCROLLER:
         return "Scroller Text";
+    case CUBE:
+        return "3D Cube Visualizer";
     default:
         return "Unknown";
     }

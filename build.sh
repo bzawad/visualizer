@@ -26,6 +26,7 @@ SOURCES=(
     "visualizer_factory.cpp"
     "visualizer.cpp"
     "scroller_text.cpp"
+    "cube_visualizer.cpp"
 )
 
 # Compile each source file
