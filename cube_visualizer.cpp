@@ -19,9 +19,16 @@ void CubeVisualizer::renderFrame(const std::vector<float>& audioData,
                                fftw_complex* out,
                                fftw_plan& plan,
                                float timeSeconds) {
-    (void)audioData;  // Mark as intentionally unused
-    (void)in;         // Mark as intentionally unused
-    (void)plan;       // Mark as intentionally unused
+    // Process audio data for FFT
+    size_t numSamples = std::min(static_cast<size_t>(N), audioData.size());
+    for (size_t i = 0; i < numSamples; i++) {
+        // Apply Hanning window
+        double multiplier = 0.5 * (1 - cos(2 * M_PI * i / (N - 1)));
+        in[i] = audioData[i] * multiplier;
+    }
+    
+    // Execute FFT
+    fftw_execute(plan);
     
     std::vector<float> magnitudes = calculateMagnitudes(out);
     render(timeSeconds, magnitudes);
@@ -32,9 +39,17 @@ void CubeVisualizer::renderLiveFrame(const std::vector<float>& audioData,
                                    fftw_complex* out,
                                    fftw_plan& plan,
                                    size_t currentPosition) {
-    (void)audioData;  // Mark as intentionally unused
-    (void)in;         // Mark as intentionally unused
-    (void)plan;       // Mark as intentionally unused
+    // Process audio data for FFT
+    size_t numSamples = std::min(static_cast<size_t>(N), audioData.size());
+    for (size_t i = 0; i < numSamples; i++) {
+        size_t index = (currentPosition + i) % audioData.size();
+        // Apply Hanning window
+        double multiplier = 0.5 * (1 - cos(2 * M_PI * i / (N - 1)));
+        in[i] = audioData[index] * multiplier;
+    }
+    
+    // Execute FFT
+    fftw_execute(plan);
     
     float timeSeconds = static_cast<float>(currentPosition) / 44100.0f;
     std::vector<float> magnitudes = calculateMagnitudes(out);
@@ -43,7 +58,7 @@ void CubeVisualizer::renderLiveFrame(const std::vector<float>& audioData,
 
 std::vector<float> CubeVisualizer::calculateMagnitudes(fftw_complex* out) {
     std::vector<float> magnitudes(N/2);
-    for (int i = 0; i < N/2; i++) {
+    for (size_t i = 0; i < N/2; i++) {
         magnitudes[i] = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]) / N;
     }
     return magnitudes;
@@ -55,32 +70,61 @@ void CubeVisualizer::render(float time, const std::vector<float>& magnitudes) {
     
     // Calculate pitch-based rotation speed (using higher frequencies for faster response)
     float pitchMagnitude = 0.0f;
-    for (int i = PITCH_START_BIN; i < PITCH_END_BIN && i < magnitudes.size(); i++) {
+    size_t pitchEndBin = std::min(static_cast<size_t>(PITCH_END_BIN), magnitudes.size());
+    
+    for (size_t i = PITCH_START_BIN; i < pitchEndBin; i++) {
         pitchMagnitude += magnitudes[i] * (i - PITCH_START_BIN + 1); // Weight higher frequencies more
     }
     pitchMagnitude /= (PITCH_END_BIN - PITCH_START_BIN);
-    float rotationSpeed = BASE_ROTATION_SPEED + pitchMagnitude * (MAX_ROTATION_SPEED - BASE_ROTATION_SPEED) * 2.0f;
+    float rotationSpeed = BASE_ROTATION_SPEED + pitchMagnitude * (MAX_ROTATION_SPEED - BASE_ROTATION_SPEED);
     
     // Calculate amplitude-based bounce (using lower frequencies for punch)
     float amplitudeMagnitude = 0.0f;
-    for (int i = AMPLITUDE_START_BIN; i < AMPLITUDE_END_BIN && i < magnitudes.size(); i++) {
-        amplitudeMagnitude += magnitudes[i];
+    float peakMagnitude = 0.0f;
+    
+    // First pass: find peak magnitude for normalization
+    size_t ampEndBin = std::min(static_cast<size_t>(AMPLITUDE_END_BIN), magnitudes.size());
+    for (size_t i = AMPLITUDE_START_BIN; i < ampEndBin; i++) {
+        peakMagnitude = std::max(peakMagnitude, magnitudes[i]);
     }
-    amplitudeMagnitude /= (AMPLITUDE_END_BIN - AMPLITUDE_START_BIN);
-    float scale = BASE_SCALE + amplitudeMagnitude * BOUNCE_FACTOR * 2.0f;
+    
+    // Second pass: calculate weighted average with emphasis on peaks
+    if (peakMagnitude > 0.0f) {
+        for (size_t i = AMPLITUDE_START_BIN; i < ampEndBin; i++) {
+            float normalizedMag = magnitudes[i] / peakMagnitude;
+            amplitudeMagnitude += normalizedMag * normalizedMag * 4.0f; // Square for more emphasis on peaks
+        }
+        amplitudeMagnitude /= (AMPLITUDE_END_BIN - AMPLITUDE_START_BIN);
+    }
+    
+    float scale = BASE_SCALE + amplitudeMagnitude * BOUNCE_FACTOR;
     
     // Set up perspective projection
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45.0f, aspectRatio, 0.1f, 100.0f);
+    
+    // Modern perspective projection
+    float fovy = 45.0f * M_PI / 180.0f; // Convert to radians
+    float f = 1.0f / tan(fovy / 2.0f);
+    float zNear = 0.1f;
+    float zFar = 100.0f;
+    
+    float projMatrix[16] = {
+        f/aspectRatio, 0.0f, 0.0f, 0.0f,
+        0.0f, f, 0.0f, 0.0f,
+        0.0f, 0.0f, (zFar+zNear)/(zNear-zFar), -1.0f,
+        0.0f, 0.0f, (2.0f*zFar*zNear)/(zNear-zFar), 0.0f
+    };
+    
+    glLoadMatrixf(projMatrix);
     
     // Set up modelview matrix
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -3.0f);  // Move back to see the cube
+    glTranslatef(0.25f, 0.0f, -5.0f);  // Move halfway back to center
     
     // Add a slight tilt for better perspective
-    glRotatef(30.0f, 1.0f, 0.0f, 0.0f);
+    glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
     
     // Draw the cube
     drawCube(time * rotationSpeed, scale);
@@ -92,13 +136,17 @@ void CubeVisualizer::drawCube(float rotationAngle, float scale) {
     // Set up the cube's position and rotation
     glPushMatrix();
     
-    // Translate to make bottom corner the pivot point
-    glTranslatef(-0.5f, -0.5f, -0.5f);
+    // Center the cube in world space
+    glTranslatef(0.0f, 0.5f, 0.0f);  // Move up slightly to center vertically
     
-    // Rotate around the corner
-    glRotatef(rotationAngle, 1.0f, 1.0f, 1.0f);
+    // Base rotation around Y axis
+    glRotatef(rotationAngle * 2.0f, 0.0f, 1.0f, 0.0f);  // Doubled Y-axis rotation speed
     
-    // Scale from the corner pivot point
+    // Additional rotations for more dynamic motion
+    glRotatef(rotationAngle * 0.7f + 30.0f, 1.0f, 0.0f, 0.0f);  // X-axis rotation with offset
+    glRotatef(rotationAngle * 0.5f, 0.0f, 0.0f, 1.0f);  // Z-axis rotation
+    
+    // Scale uniformly
     glScalef(scale, scale, scale);
     
     // Draw the cube edges with a metallic color gradient
@@ -106,8 +154,9 @@ void CubeVisualizer::drawCube(float rotationAngle, float scale) {
     for (size_t i = 0; i < edges.size(); i += 2) {
         // Calculate color based on position (gradient from silver to bright cyan)
         float colorPos = static_cast<float>(i) / edges.size();
-        float brightness = 0.7f + colorPos * 0.3f;
-        glColor3f(brightness * 0.8f, brightness * 0.9f, brightness);
+        float brightness = 0.8f + colorPos * 0.2f;
+        // Make the color more vibrant
+        glColor3f(brightness * 0.7f, brightness * 1.0f, brightness);
         
         // Get vertex indices for this edge
         int v1 = edges[i];

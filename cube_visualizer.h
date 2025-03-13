@@ -49,17 +49,17 @@ private:
     
     // Rendering parameters
     static constexpr float LINE_WIDTH = 5.0f;
-    static constexpr float BASE_ROTATION_SPEED = 0.5f;
-    static constexpr float MAX_ROTATION_SPEED = 8.0f;
-    static constexpr float BASE_SCALE = 0.6f;
-    static constexpr float MAX_SCALE = 1.2f;
-    static constexpr float BOUNCE_FACTOR = 0.6f;
+    static constexpr float BASE_ROTATION_SPEED = 3.0f;
+    static constexpr float MAX_ROTATION_SPEED = 12.0f;
+    static constexpr float BASE_SCALE = 0.8f;
+    static constexpr float MAX_SCALE = 1.5f;
+    static constexpr float BOUNCE_FACTOR = 1.2f;
     
     // Audio analysis parameters
-    static constexpr int PITCH_START_BIN = 10;    // ~200 Hz
-    static constexpr int PITCH_END_BIN = 100;     // ~2000 Hz
-    static constexpr int AMPLITUDE_START_BIN = 0;  // 0 Hz
-    static constexpr int AMPLITUDE_END_BIN = 30;   // ~600 Hz
+    static constexpr int PITCH_START_BIN = 5;
+    static constexpr int PITCH_END_BIN = 50;
+    static constexpr int AMPLITUDE_START_BIN = 0;
+    static constexpr int AMPLITUDE_END_BIN = 8;
     
     float aspectRatio;
 }; 
