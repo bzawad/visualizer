@@ -91,7 +91,6 @@ static int paCallback(const void *inputBuffer, void *outputBuffer,
                       PaStreamCallbackFlags statusFlags,
                       void *userData)
 {
-
     // Mark unused parameters to silence compiler warnings
     (void)inputBuffer;
     (void)timeInfo;
@@ -99,32 +98,36 @@ static int paCallback(const void *inputBuffer, void *outputBuffer,
     (void)userData;
 
     float *out = (float *)outputBuffer;
-
     size_t position = currentPosition.load();
+    bool allFinished = true;
 
-    // Copy data to FFT input buffer for visualization
+    // Clear output buffer
+    for (unsigned long i = 0; i < framesPerBuffer; i++) {
+        out[i] = 0.0f;
+    }
+
+    // Mix all audio sources together
     std::lock_guard<std::mutex> lock(audioMutex);
-    for (unsigned long i = 0; i < framesPerBuffer; i++)
-    {
-        if (position + i < audioData.size())
-        {
-            out[i] = audioData[position + i];
-            // If we have enough samples, update FFT input
-            if (i < N)
-            {
-                in[i] = (double)audioData[position + i];
+    for (const auto& source : multiAudioData) {
+        for (unsigned long i = 0; i < framesPerBuffer; i++) {
+            if (position + i < source.size()) {
+                // Mix audio with equal weighting (1/number of sources)
+                out[i] += source[position + i] / static_cast<float>(multiAudioData.size());
+                
+                // If we have enough samples, update FFT input
+                if (i < N) {
+                    in[i] = static_cast<double>(out[i]);
+                }
+                
+                allFinished = false;
             }
-        }
-        else
-        {
-            out[i] = 0.0f;
-            playbackFinished = true;
         }
     }
 
     // Update position
     position += framesPerBuffer;
     currentPosition.store(position);
+    playbackFinished = allFinished;
 
     return playbackFinished ? paComplete : paContinue;
 }
@@ -523,40 +526,47 @@ void encodeAudioForFrame(int frameIndex)
             float *audioFrameDataLeft = (float *)audioFrame->data[0];  // Left channel
             float *audioFrameDataRight = (float *)audioFrame->data[1]; // Right channel
 
-            // Copy samples for the current frame
-            for (int i = 0; i < frameSize; i++)
-            {
-                int64_t samplePos = pos + i;
-                if (samplePos < static_cast<int64_t>(originalAudioData.size() / 2))
+            // Clear the audio frame buffers
+            for (int i = 0; i < frameSize; i++) {
+                audioFrameDataLeft[i] = 0.0f;
+                audioFrameDataRight[i] = 0.0f;
+            }
+
+            // Mix all audio sources together
+            for (const auto& source : multiAudioData) {
+                for (int i = 0; i < frameSize; i++)
                 {
-                    // Left channel (even indices)
-                    audioFrameDataLeft[i] = originalAudioData[samplePos * 2];
-                    // Right channel (odd indices)
-                    audioFrameDataRight[i] = originalAudioData[samplePos * 2 + 1];
-                }
-                else
-                {
-                    audioFrameDataLeft[i] = 0.0f;  // Pad with silence
-                    audioFrameDataRight[i] = 0.0f; // Pad with silence
+                    int64_t samplePos = pos + i;
+                    if (samplePos < static_cast<int64_t>(source.size()))
+                    {
+                        // Mix with equal weighting (1/number of sources)
+                        float sample = source[samplePos] / static_cast<float>(multiAudioData.size());
+                        audioFrameDataLeft[i] += sample;
+                        audioFrameDataRight[i] += sample;
+                    }
                 }
             }
         }
         else
         {
-            // Mono output - same as before
+            // Mono output
             float *audioFrameData = (float *)audioFrame->data[0];
 
-            // Copy samples for the current frame
-            for (int i = 0; i < frameSize; i++)
-            {
-                int64_t samplePos = pos + i;
-                if (samplePos < static_cast<int64_t>(audioData.size()))
+            // Clear the audio frame buffer
+            for (int i = 0; i < frameSize; i++) {
+                audioFrameData[i] = 0.0f;
+            }
+
+            // Mix all audio sources together
+            for (const auto& source : multiAudioData) {
+                for (int i = 0; i < frameSize; i++)
                 {
-                    audioFrameData[i] = audioData[samplePos];
-                }
-                else
-                {
-                    audioFrameData[i] = 0.0f; // Pad with silence if needed
+                    int64_t samplePos = pos + i;
+                    if (samplePos < static_cast<int64_t>(source.size()))
+                    {
+                        // Mix with equal weighting (1/number of sources)
+                        audioFrameData[i] += source[samplePos] / static_cast<float>(multiAudioData.size());
+                    }
                 }
             }
         }
@@ -620,6 +630,14 @@ bool loadWavFile(const std::string &filename)
     std::cout << "Channels: " << sfInfo.channels << std::endl;
     std::cout << "Frames: " << sfInfo.frames << std::endl;
 
+    // Check sample rate compatibility
+    if (sfInfo.samplerate != SAMPLE_RATE) {
+        std::cerr << "Warning: Sample rate mismatch. Expected " << SAMPLE_RATE 
+                  << " Hz, got " << sfInfo.samplerate << " Hz" << std::endl;
+        sf_close(sndFile);
+        return false;
+    }
+
     // Store the original channel count
     originalChannels = sfInfo.channels;
 
@@ -637,13 +655,9 @@ bool loadWavFile(const std::string &filename)
             return false;
         }
 
-        // Now create mono version for visualization
-        std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
-
-        // Resize our mono audio buffer
-        newAudioData.resize(sfInfo.frames);
-
         // Convert multi-channel to mono by averaging all channels
+        std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
+        newAudioData.resize(sfInfo.frames);
         for (sf_count_t i = 0; i < sfInfo.frames; i++) {
             float sum = 0.0f;
             for (int ch = 0; ch < sfInfo.channels; ch++) {
@@ -668,10 +682,26 @@ bool loadWavFile(const std::string &filename)
     audioFilenames.push_back(filename);
     multiAudioData.push_back(newAudioData);
 
+    // Find the longest audio file length
+    size_t maxLength = 0;
+    for (const auto& source : multiAudioData) {
+        maxLength = std::max(maxLength, source.size());
+    }
+
+    // Pad shorter audio files with silence to match the longest one
+    if (maxLength > 0) {
+        for (auto& source : multiAudioData) {
+            if (source.size() < maxLength) {
+                std::cout << "Padding audio file with silence to match longest file length" << std::endl;
+                source.resize(maxLength, 0.0f);
+            }
+        }
+    }
+
     // For backward compatibility, keep the first audio file in the original audioData vector
     if (multiAudioData.size() == 1) {
-        audioData = newAudioData;
-        originalAudioData = newAudioData;
+        audioData = multiAudioData[0];
+        originalAudioData = multiAudioData[0];
     }
 
     return true;
