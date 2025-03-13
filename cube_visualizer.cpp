@@ -125,7 +125,7 @@ void CubeVisualizer::render(float time, const std::vector<float>& magnitudes) {
     // Set up modelview matrix
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glTranslatef(0.25f, 0.0f, -5.0f);  // Move halfway back to center
+    glTranslatef(0.0f, -0.40f, -4.0f);  // Move to the left (changed from 0.25f to -0.25f)
     
     // Add a slight tilt for better perspective
     glRotatef(20.0f, 1.0f, 0.0f, 0.0f);
