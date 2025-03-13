@@ -1,18 +1,22 @@
 # Music Visualizer
 
-A simple music visualizer that plays a WAV file and displays a frequency or waveform visualization in green.
+A powerful music visualizer that supports multiple WAV files with various visualization types. Perfect for analyzing and comparing audio files visually.
 
 ## Features
 
-- Play mono or stereo WAV files
+- Play and visualize multiple WAV files simultaneously (up to 8 files)
+- Support for mono and stereo WAV files
 - Multiple visualization types:
-  - Frequency bars (16 green bars)
-  - Waveform display
-  - Multiband waveforms
-  - ASCII frequency bars
-  - Spectrogram
+  - Bar Equalizer (`bars`): Classic frequency bars visualization
+  - Waveform (`waveform`): Grid-based waveform display with support for multiple files
+  - Multi-band Waveform (`multiband`): Frequency-separated waveform visualization
+  - ASCII Bar Equalizer (`ascii`): Text-based frequency visualization
+  - Spectrogram (`spectrogram`): Time-frequency heat map
+  - Multi-band Circle (`circle`): Circular frequency visualization
+  - 3D Terrain (`terrain`): Three-dimensional terrain-like visualization
 - Record visualizations to MP4 video files
-- Press Escape to exit the visualizer
+- Interactive visualization switching
+- Real-time audio mixing for multiple files
 
 ## Requirements
 
@@ -42,26 +46,42 @@ chmod +x build.sh
 ## Usage
 
 ```bash
-./visualizer [--type bars|waveform] [--record output.mp4] <wav_file>
+./visualizer [--type <type>] [--record output.mp4] <wav_files...>
 ```
+
+Visualization types:
+- `bars`: Classic frequency bars (default)
+- `waveform`: Grid-based waveform display
+- `multiband`: Multi-band waveform
+- `ascii`: ASCII frequency bars
+- `spectrogram`: Spectrogram display
+- `circle`: Multi-band circle
+- `terrain`: 3D terrain visualization
+
+For waveform visualization with multiple files, the display is arranged in a grid layout:
+- 1 file: 1x1 grid
+- 2 files: 1x2 grid
+- 3-4 files: 2x2 grid
+- 5-6 files: 2x3 grid
+- 7-8 files: 2x4 grid
 
 Examples:
 
 ```bash
-# Default visualization (frequency bars)
+# Default visualization (frequency bars) with single file
 ./visualizer sample.wav
 
-# Waveform visualization
-./visualizer --type waveform sample.wav 
+# Waveform visualization with multiple files
+./visualizer --type waveform song1.wav song2.wav song3.wav
 
-# Explicitly select bar equalizer
-./visualizer --type bars sample.wav
+# Multi-band visualization with two files
+./visualizer --type multiband track1.wav track2.wav
 
-# Record bar visualization to a video file
-./visualizer --record output.mp4 sample.wav
+# Record multiple waveforms to video
+./visualizer --type waveform --record output.mp4 song1.wav song2.wav song3.wav
 
-# Record waveform visualization to a video file
-./visualizer --type waveform --record output.mp4 sample.wav
+# 3D terrain visualization
+./visualizer --type terrain music.wav
 ```
 
 ## Creating Test Files
@@ -77,14 +97,27 @@ sox -n -r 44100 -c 1 sample.wav synth 10 sine 440 vol 0.5
 
 # Create a more complex sample with multiple frequencies
 sox -n -r 44100 -c 1 complex_sample.wav synth 10 sine 110 sine 220 sine 440 sine 880 sine 1760 vol 0.5
+
+# Create stereo test file
+sox -n -r 44100 -c 2 stereo_test.wav synth 10 sine 440 sine 880 remix 1 2
 ```
 
 ## Controls
 
+- Press `V` to cycle through visualization types
 - Press `Esc` to exit the visualizer 
+
+## Multiple File Support
+
+When playing multiple WAV files:
+- All files must have the same sample rate (44.1kHz)
+- Files can have different lengths - shorter files will be padded with silence
+- Audio is automatically mixed with equal weighting
+- Each file is displayed individually in the waveform visualization
+- For other visualization types, the mixed audio is visualized
 
 ## Video Recording
 
-When using the `--record` option, the visualizer will save the visualization to an MP4 video file. The recording will automatically stop when the audio playback finishes. The resulting video is encoded using H.264 at 30 frames per second and will have the same resolution as the visualizer window (800x600).
+When using the `--record` option, the visualizer will save both the visualization and mixed audio to an MP4 video file. The recording will automatically stop when the longest audio file finishes playing. The resulting video is encoded using H.264 at 30 frames per second with AAC audio, and will have a resolution of 800x600.
 
 Note: Recording requires FFmpeg libraries to be installed. 

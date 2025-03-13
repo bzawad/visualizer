@@ -17,6 +17,11 @@
 // Include our visualization components
 #include "visualizer_base.h"
 #include "visualizer_factory.h"
+#include "waveform.h"  // Add this include for Waveform class
+#include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
+#include "multi_band_circle_waveform.h"  // Add this include for MultiBandCircleWaveform class
+#include "grid_visualizer.h"
+#include "scroller_text.h"
 
 // FFmpeg libraries
 extern "C"
@@ -69,6 +74,10 @@ AVFrame *audioFrame = nullptr;
 AVPacket *packet = nullptr;
 std::vector<uint8_t> frameBuffer;
 
+// Add to the top of the file with other global variables
+std::vector<std::vector<float>> multiAudioData;  // Store multiple audio sources
+std::vector<std::string> audioFilenames;         // Store filenames for multiple sources
+
 // Forward declarations
 void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
 void framebufferSizeCallback(GLFWwindow *window, int width, int height);
@@ -86,7 +95,6 @@ static int paCallback(const void *inputBuffer, void *outputBuffer,
                       PaStreamCallbackFlags statusFlags,
                       void *userData)
 {
-
     // Mark unused parameters to silence compiler warnings
     (void)inputBuffer;
     (void)timeInfo;
@@ -94,32 +102,36 @@ static int paCallback(const void *inputBuffer, void *outputBuffer,
     (void)userData;
 
     float *out = (float *)outputBuffer;
-
     size_t position = currentPosition.load();
+    bool allFinished = true;
 
-    // Copy data to FFT input buffer for visualization
+    // Clear output buffer
+    for (unsigned long i = 0; i < framesPerBuffer; i++) {
+        out[i] = 0.0f;
+    }
+
+    // Mix all audio sources together
     std::lock_guard<std::mutex> lock(audioMutex);
-    for (unsigned long i = 0; i < framesPerBuffer; i++)
-    {
-        if (position + i < audioData.size())
-        {
-            out[i] = audioData[position + i];
-            // If we have enough samples, update FFT input
-            if (i < N)
-            {
-                in[i] = (double)audioData[position + i];
+    for (const auto& source : multiAudioData) {
+        for (unsigned long i = 0; i < framesPerBuffer; i++) {
+            if (position + i < source.size()) {
+                // Mix audio with equal weighting (1/number of sources)
+                out[i] += source[position + i] / static_cast<float>(multiAudioData.size());
+                
+                // If we have enough samples, update FFT input
+                if (i < N) {
+                    in[i] = static_cast<double>(out[i]);
+                }
+                
+                allFinished = false;
             }
-        }
-        else
-        {
-            out[i] = 0.0f;
-            playbackFinished = true;
         }
     }
 
     // Update position
     position += framesPerBuffer;
     currentPosition.store(position);
+    playbackFinished = allFinished;
 
     return playbackFinished ? paComplete : paContinue;
 }
@@ -130,8 +142,8 @@ void renderFrameAtTime(float timeSeconds)
     // The OpenGL state (viewport, matrices) is now set by the caller
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Use the current visualizer to render the frame
-    currentVisualizer->renderFrame(audioData, in, out, plan, timeSeconds);
+    // Use the current visualizer to render the frame with multiple audio sources
+    currentVisualizer->renderFrame(multiAudioData, in, out, plan, timeSeconds);
 }
 
 // OpenGL rendering function for live mode
@@ -145,8 +157,8 @@ void renderLiveVisualization()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // Use the current visualizer to render the live frame
-    currentVisualizer->renderLiveFrame(audioData, in, out, plan, currentPosition.load());
+    // Use the current visualizer to render the live frame with multiple audio sources
+    currentVisualizer->renderLiveFrame(multiAudioData, in, out, plan, currentPosition.load());
 }
 
 // Initialize video encoder
@@ -518,40 +530,47 @@ void encodeAudioForFrame(int frameIndex)
             float *audioFrameDataLeft = (float *)audioFrame->data[0];  // Left channel
             float *audioFrameDataRight = (float *)audioFrame->data[1]; // Right channel
 
-            // Copy samples for the current frame
-            for (int i = 0; i < frameSize; i++)
-            {
-                int64_t samplePos = pos + i;
-                if (samplePos < static_cast<int64_t>(originalAudioData.size() / 2))
+            // Clear the audio frame buffers
+            for (int i = 0; i < frameSize; i++) {
+                audioFrameDataLeft[i] = 0.0f;
+                audioFrameDataRight[i] = 0.0f;
+            }
+
+            // Mix all audio sources together
+            for (const auto& source : multiAudioData) {
+                for (int i = 0; i < frameSize; i++)
                 {
-                    // Left channel (even indices)
-                    audioFrameDataLeft[i] = originalAudioData[samplePos * 2];
-                    // Right channel (odd indices)
-                    audioFrameDataRight[i] = originalAudioData[samplePos * 2 + 1];
-                }
-                else
-                {
-                    audioFrameDataLeft[i] = 0.0f;  // Pad with silence
-                    audioFrameDataRight[i] = 0.0f; // Pad with silence
+                    int64_t samplePos = pos + i;
+                    if (samplePos < static_cast<int64_t>(source.size()))
+                    {
+                        // Mix with equal weighting (1/number of sources)
+                        float sample = source[samplePos] / static_cast<float>(multiAudioData.size());
+                        audioFrameDataLeft[i] += sample;
+                        audioFrameDataRight[i] += sample;
+                    }
                 }
             }
         }
         else
         {
-            // Mono output - same as before
+            // Mono output
             float *audioFrameData = (float *)audioFrame->data[0];
 
-            // Copy samples for the current frame
-            for (int i = 0; i < frameSize; i++)
-            {
-                int64_t samplePos = pos + i;
-                if (samplePos < static_cast<int64_t>(audioData.size()))
+            // Clear the audio frame buffer
+            for (int i = 0; i < frameSize; i++) {
+                audioFrameData[i] = 0.0f;
+            }
+
+            // Mix all audio sources together
+            for (const auto& source : multiAudioData) {
+                for (int i = 0; i < frameSize; i++)
                 {
-                    audioFrameData[i] = audioData[samplePos];
-                }
-                else
-                {
-                    audioFrameData[i] = 0.0f; // Pad with silence if needed
+                    int64_t samplePos = pos + i;
+                    if (samplePos < static_cast<int64_t>(source.size()))
+                    {
+                        // Mix with equal weighting (1/number of sources)
+                        audioFrameData[i] += source[samplePos] / static_cast<float>(multiAudioData.size());
+                    }
                 }
             }
         }
@@ -615,49 +634,46 @@ bool loadWavFile(const std::string &filename)
     std::cout << "Channels: " << sfInfo.channels << std::endl;
     std::cout << "Frames: " << sfInfo.frames << std::endl;
 
+    // Check sample rate compatibility
+    if (sfInfo.samplerate != SAMPLE_RATE) {
+        std::cerr << "Warning: Sample rate mismatch. Expected " << SAMPLE_RATE 
+                  << " Hz, got " << sfInfo.samplerate << " Hz" << std::endl;
+        sf_close(sndFile);
+        return false;
+    }
+
     // Store the original channel count
     originalChannels = sfInfo.channels;
 
+    // Create a new vector for this audio file's data
+    std::vector<float> newAudioData;
+    
     // Store original audio data
-    if (sfInfo.channels > 1)
-    {
+    if (sfInfo.channels > 1) {
         // For stereo/multi-channel, store the original data as interleaved
-        originalAudioData.resize(sfInfo.frames * sfInfo.channels);
-        sf_count_t count = sf_read_float(sndFile, originalAudioData.data(), originalAudioData.size());
-        if (count != sfInfo.frames * sfInfo.channels)
-        {
+        std::vector<float> originalData(sfInfo.frames * sfInfo.channels);
+        sf_count_t count = sf_read_float(sndFile, originalData.data(), originalData.size());
+        if (count != sfInfo.frames * sfInfo.channels) {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
         }
 
-        // Now create mono version for visualization
-        std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
-
-        // Resize our mono audio buffer
-        audioData.resize(sfInfo.frames);
-
         // Convert multi-channel to mono by averaging all channels
-        for (sf_count_t i = 0; i < sfInfo.frames; i++)
-        {
+        std::cout << "Converting " << sfInfo.channels << " channels to mono for visualization" << std::endl;
+        newAudioData.resize(sfInfo.frames);
+        for (sf_count_t i = 0; i < sfInfo.frames; i++) {
             float sum = 0.0f;
-            for (int ch = 0; ch < sfInfo.channels; ch++)
-            {
-                sum += originalAudioData[i * sfInfo.channels + ch];
+            for (int ch = 0; ch < sfInfo.channels; ch++) {
+                sum += originalData[i * sfInfo.channels + ch];
             }
-            audioData[i] = sum / sfInfo.channels;
+            newAudioData[i] = sum / sfInfo.channels;
         }
-    }
-    else
-    {
-        // Mono file - store both original and visualization data the same
-        audioData.resize(sfInfo.frames);
-        originalAudioData = audioData; // Share the same data for mono
-
-        // Read the entire file
-        sf_count_t count = sf_read_float(sndFile, audioData.data(), audioData.size());
-        if (count != sfInfo.frames)
-        {
+    } else {
+        // Mono file - read directly
+        newAudioData.resize(sfInfo.frames);
+        sf_count_t count = sf_read_float(sndFile, newAudioData.data(), newAudioData.size());
+        if (count != sfInfo.frames) {
             std::cerr << "Error reading WAV file: " << sf_strerror(sndFile) << std::endl;
             sf_close(sndFile);
             return false;
@@ -665,6 +681,33 @@ bool loadWavFile(const std::string &filename)
     }
 
     sf_close(sndFile);
+
+    // Store the filename and audio data
+    audioFilenames.push_back(filename);
+    multiAudioData.push_back(newAudioData);
+
+    // Find the longest audio file length
+    size_t maxLength = 0;
+    for (const auto& source : multiAudioData) {
+        maxLength = std::max(maxLength, source.size());
+    }
+
+    // Pad shorter audio files with silence to match the longest one
+    if (maxLength > 0) {
+        for (auto& source : multiAudioData) {
+            if (source.size() < maxLength) {
+                std::cout << "Padding audio file with silence to match longest file length" << std::endl;
+                source.resize(maxLength, 0.0f);
+            }
+        }
+    }
+
+    // For backward compatibility, keep the first audio file in the original audioData vector
+    if (multiAudioData.size() == 1) {
+        audioData = multiAudioData[0];
+        originalAudioData = multiAudioData[0];
+    }
+
     return true;
 }
 
@@ -704,6 +747,12 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = TERRAIN_VISUALIZER_3D;
             break;
         case TERRAIN_VISUALIZER_3D:
+            currentVisualizerType = GRID_VISUALIZER;
+            break;
+        case GRID_VISUALIZER:
+            currentVisualizerType = SCROLLER;
+            break;
+        case SCROLLER:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -752,32 +801,44 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height)
 // Main function
 int main(int argc, char **argv)
 {
-    std::string wavFile;
     std::string visualizerTypeName = "bars"; // Default
 
     // Parse command line arguments
-    for (int i = 1; i < argc; i++)
-    {
-        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc)
-        {
+    std::vector<std::string> wavFiles;
+    
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--type") == 0 && i + 1 < argc) {
             visualizerTypeName = argv[i + 1];
             i++; // Skip the next argument
-        }
-        else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc)
-        {
+        } else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) {
             recordVideo = true;
             outputVideoFile = argv[i + 1];
             i++; // Skip the next argument
-        }
-        else
-        {
-            wavFile = argv[i];
+        } else {
+            // Collect all WAV files
+            wavFiles.push_back(argv[i]);
         }
     }
 
-    if (wavFile.empty())
-    {
-        std::cerr << "Usage: " << argv[0] << " [--type bars|waveform|multiband|ascii|spectrogram|circle|terrain] [--record output.mp4] <wav_file>" << std::endl;
+    if (wavFiles.empty()) {
+        std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
+                  << "Options:\n"
+                  << "  --type <type>       Visualization type (default: bars)\n"
+                  << "                      Available types: bars, waveform, multiband, ascii,\n"
+                  << "                                      spectrogram, circle, terrain\n"
+                  << "  --record <file>     Record visualization to video file\n"
+                  << "\n"
+                  << "For waveform visualization, you can provide up to 8 WAV files.\n"
+                  << "The files will be arranged in a grid layout:\n"
+                  << "  1 file:   1x1 grid\n"
+                  << "  2 files:  1x2 grid\n"
+                  << "  3-4 files: 2x2 grid\n"
+                  << "  5-6 files: 2x3 grid\n"
+                  << "  7-8 files: 2x4 grid\n"
+                  << "\n"
+                  << "Example:\n"
+                  << "  " << argv[0] << " --type waveform song1.wav song2.wav song3.wav\n"
+                  << std::endl;
         return -1;
     }
 
@@ -785,37 +846,59 @@ int main(int argc, char **argv)
     currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
 
     // Get the visualizer type from the name
-    if (visualizerTypeName == "waveform")
-    {
+    if (visualizerTypeName == "waveform") {
         currentVisualizerType = WAVEFORM;
-    }
-    else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band")
-    {
+    } else if (visualizerTypeName == "multiband" || visualizerTypeName == "multi_band") {
         currentVisualizerType = MULTI_BAND_WAVEFORM;
-    }
-    else if (visualizerTypeName == "ascii")
-    {
+    } else if (visualizerTypeName == "ascii") {
         currentVisualizerType = ASCII_BAR_EQUALIZER;
-    }
-    else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
-    {
+    } else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum") {
         currentVisualizerType = SPECTROGRAM;
-    }
-    else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
-    {
+    } else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle") {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
-    }
-    else
-    {
+    } else if (visualizerTypeName == "grid") {
+        currentVisualizerType = GRID_VISUALIZER;
+    } else {
         currentVisualizerType = BAR_EQUALIZER;
     }
 
     std::cout << "Using " << VisualizerFactory::getVisualizerName(currentVisualizerType) << " visualization" << std::endl;
 
-    // Load WAV file
-    if (!loadWavFile(wavFile))
-    {
-        return -1;
+    // Load all WAV files (up to 9)
+    size_t maxFiles = std::min(wavFiles.size(), size_t(9));
+    for (size_t i = 0; i < maxFiles; i++) {
+        if (!loadWavFile(wavFiles[i])) {
+            return -1;
+        }
+    }
+
+    // If using waveform visualizer, set the multiple audio sources
+    if (currentVisualizerType == WAVEFORM) {
+        Waveform* waveformVis = dynamic_cast<Waveform*>(currentVisualizer.get());
+        if (waveformVis) {
+            waveformVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using multi-band waveform visualizer, set the multiple audio sources
+    else if (currentVisualizerType == MULTI_BAND_WAVEFORM) {
+        MultiBandWaveform* multiBandVis = dynamic_cast<MultiBandWaveform*>(currentVisualizer.get());
+        if (multiBandVis) {
+            multiBandVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using multi-band circle visualizer, set the multiple audio sources
+    else if (currentVisualizerType == MULTI_BAND_CIRCLE_WAVEFORM) {
+        MultiBandCircleWaveform* circleVis = dynamic_cast<MultiBandCircleWaveform*>(currentVisualizer.get());
+        if (circleVis) {
+            circleVis->setAudioSources(multiAudioData);
+        }
+    }
+    // If using grid visualizer, set the multiple audio sources
+    else if (currentVisualizerType == GRID_VISUALIZER) {
+        GridVisualizer* gridVis = dynamic_cast<GridVisualizer*>(currentVisualizer.get());
+        if (gridVis) {
+            gridVis->setAudioSources(multiAudioData);
+        }
     }
 
     // Calculate total number of frames based on audio length
@@ -1081,4 +1164,35 @@ int main(int argc, char **argv)
     glfwTerminate();
 
     return 0;
+}
+
+Visualizer::Visualizer() {
+    screenWidth = 800;
+    screenHeight = 600;
+}
+
+Visualizer::~Visualizer() {
+}
+
+void Visualizer::initialize(int width, int height) {
+    screenWidth = width;
+    screenHeight = height;
+}
+
+void Visualizer::renderFrame(const std::vector<std::vector<float>>& audioSources,
+                           double* in,
+                           fftw_complex* out,
+                           fftw_plan& plan,
+                           float timeSeconds) {
+    // Default implementation for backward compatibility
+    renderFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, timeSeconds);
+}
+
+void Visualizer::renderLiveFrame(const std::vector<std::vector<float>>& audioSources,
+                               double* in,
+                               fftw_complex* out,
+                               fftw_plan& plan,
+                               size_t currentPosition) {
+    // Default implementation for backward compatibility
+    renderLiveFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, currentPosition);
 }
