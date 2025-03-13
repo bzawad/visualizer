@@ -860,8 +860,8 @@ int main(int argc, char **argv)
 
     std::cout << "Using " << VisualizerFactory::getVisualizerName(currentVisualizerType) << " visualization" << std::endl;
 
-    // Load all WAV files (up to 8)
-    size_t maxFiles = std::min(wavFiles.size(), size_t(8));
+    // Load all WAV files (up to 9)
+    size_t maxFiles = std::min(wavFiles.size(), size_t(9));
     for (size_t i = 0; i < maxFiles; i++) {
         if (!loadWavFile(wavFiles[i])) {
             return -1;

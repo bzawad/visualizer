@@ -27,7 +27,11 @@ void GridVisualizer::calculateGridDimensions(int numSources, int& rows, int& col
     } else if (numSources <= 6) {
         rows = 2;
         cols = 3;
+    } else if (numSources <= 9) {  // Support up to 9 files
+        rows = 3;
+        cols = 3;
     } else {
+        // Cap at 9 files, using 3x3 grid
         rows = 3;
         cols = 3;
     }
@@ -101,12 +105,9 @@ void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, f
         for (int x = 0; x < GRID_SIZE; x++) {
             float value = smoothedValues[y * GRID_SIZE + x];
             
-            // Use a more vibrant color scheme
-            float r = std::min(1.0f, value * 2.0f);  // Red increases faster
-            float g = value * 0.5f;                  // Less green for contrast
-            float b = std::max(0.2f, value);         // Minimum blue for visibility
-            
-            glColor3f(r, g, b);
+            // Use black to white color scheme
+            float brightness = value;
+            glColor3f(brightness, brightness, brightness);
             
             float cellX = x1 + x * cellWidth;
             float cellY = y1 + y * cellHeight;
@@ -119,8 +120,8 @@ void GridVisualizer::renderFrequencyGrid(const std::vector<float>& magnitudes, f
     }
     glEnd();
     
-    // Draw grid lines for better visibility
-    glColor3f(0.3f, 0.3f, 0.3f);
+    // Draw grid lines
+    glColor3f(0.3f, 0.3f, 0.3f);  // Dark gray grid lines
     glBegin(GL_LINES);
     for (int i = 0; i <= GRID_SIZE; i++) {
         float x = x1 + i * cellWidth;
@@ -146,25 +147,29 @@ void GridVisualizer::renderFrame(const std::vector<std::vector<float>>& audioSou
     int rows, cols;
     calculateGridDimensions(audioSources.size(), rows, cols);
     
-    float gridWidth = 2.0f / cols;  // Convert to OpenGL coordinates (-1 to 1)
+    // Ensure we're using the full window space
+    float gridWidth = 2.0f / cols;
     float gridHeight = 2.0f / rows;
+    float padding = 0.01f;  // Smaller padding for better space utilization
     
     for (size_t i = 0; i < audioSources.size(); i++) {
+        // Calculate row and column indices
         int row = i / cols;
         int col = i % cols;
         
-        float x1 = -1.0f + col * gridWidth;  // Start from -1 (left edge)
-        float y1 = 1.0f - (row + 1) * gridHeight;  // Start from 1 (top edge)
+        // Calculate grid position in OpenGL coordinates
+        float x1 = -1.0f + col * gridWidth;
+        float y1 = 1.0f - (row + 1) * gridHeight;
         float x2 = x1 + gridWidth;
         float y2 = y1 + gridHeight;
         
         // Add padding
-        float padding = 0.01f;
         x1 += padding;
         y1 += padding;
         x2 -= padding;
         y2 -= padding;
         
+        // Process and render the grid
         size_t position = static_cast<size_t>(timeSeconds * SAMPLE_RATE) % audioSources[i].size();
         processAudioForFFT(audioSources[i], position, in);
         
@@ -187,25 +192,29 @@ void GridVisualizer::renderLiveFrame(const std::vector<std::vector<float>>& audi
     int rows, cols;
     calculateGridDimensions(audioSources.size(), rows, cols);
     
-    float gridWidth = 2.0f / cols;  // Convert to OpenGL coordinates (-1 to 1)
+    // Ensure we're using the full window space
+    float gridWidth = 2.0f / cols;
     float gridHeight = 2.0f / rows;
+    float padding = 0.01f;  // Smaller padding for better space utilization
     
     for (size_t i = 0; i < audioSources.size(); i++) {
+        // Calculate row and column indices
         int row = i / cols;
         int col = i % cols;
         
-        float x1 = -1.0f + col * gridWidth;  // Start from -1 (left edge)
-        float y1 = 1.0f - (row + 1) * gridHeight;  // Start from 1 (top edge)
+        // Calculate grid position in OpenGL coordinates
+        float x1 = -1.0f + col * gridWidth;
+        float y1 = 1.0f - (row + 1) * gridHeight;
         float x2 = x1 + gridWidth;
         float y2 = y1 + gridHeight;
         
         // Add padding
-        float padding = 0.01f;
         x1 += padding;
         y1 += padding;
         x2 -= padding;
         y2 -= padding;
         
+        // Process and render the grid
         processAudioForFFT(audioSources[i], currentPosition, in);
         
         fftw_execute(plan);
