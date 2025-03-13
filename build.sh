@@ -1,49 +1,41 @@
 #!/bin/bash
 
-# Get Homebrew prefix location
-BREW_PREFIX=$(brew --prefix)
+# Ensure the script exits on any error
+set -e
 
-# C++ compiler flags
-CXXFLAGS="-std=c++11 -Wall -Wextra -O2 -I${BREW_PREFIX}/include"
+# Compiler and flags
+CXX="clang++"
+CXXFLAGS="-std=c++17 -Wall -Wextra"
 
-# Linker flags for required libraries
-LDFLAGS="-L${BREW_PREFIX}/lib -lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
+# Include and library paths for macOS (using Homebrew paths)
+INCLUDES="-I/opt/homebrew/include"
+LDFLAGS="-L/opt/homebrew/lib"
+LIBS="-lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
 FFMPEG_LIBS="-lavcodec -lavformat -lavutil -lswscale"
 
-# Compile the visualizer components
-echo "Compiling bar_equalizer.cpp..."
-g++ $CXXFLAGS -c bar_equalizer.cpp -o bar_equalizer.o
+# Source files
+SOURCES=(
+    "bar_equalizer.cpp"
+    "waveform.cpp"
+    "multi_band_waveform.cpp"
+    "multi_band_circle_waveform.cpp"
+    "ascii_bar_equalizer.cpp"
+    "spectrogram.cpp"
+    "terrain_visualizer_3d.cpp"
+    "grid_visualizer.cpp"
+    "visualizer_factory.cpp"
+    "visualizer.cpp"
+    "scroller_text.cpp"
+)
 
-echo "Compiling waveform.cpp..."
-g++ $CXXFLAGS -c waveform.cpp -o waveform.o
+# Compile each source file
+for source in "${SOURCES[@]}"; do
+    echo "Compiling ${source}..."
+    $CXX $CXXFLAGS $INCLUDES -c "$source"
+done
 
-echo "Compiling multi_band_waveform.cpp..."
-g++ $CXXFLAGS -c multi_band_waveform.cpp -o multi_band_waveform.o
-
-echo "Compiling multi_band_circle_waveform.cpp..."
-g++ $CXXFLAGS -c multi_band_circle_waveform.cpp -o multi_band_circle_waveform.o
-
-echo "Compiling ascii_bar_equalizer.cpp..."
-g++ $CXXFLAGS -c ascii_bar_equalizer.cpp -o ascii_bar_equalizer.o
-
-echo "Compiling spectrogram.cpp..."
-g++ $CXXFLAGS -c spectrogram.cpp -o spectrogram.o
-
-echo "Compiling terrain_visualizer_3d.cpp..."
-g++ $CXXFLAGS -c terrain_visualizer_3d.cpp -o terrain_visualizer_3d.o
-
-echo "Compiling grid_visualizer.cpp..."
-g++ $CXXFLAGS -c grid_visualizer.cpp -o grid_visualizer.o
-
-echo "Compiling visualizer_factory.cpp..."
-g++ $CXXFLAGS -c visualizer_factory.cpp -o visualizer_factory.o
-
-# Compile main file
-echo "Compiling visualizer.cpp..."
-g++ $CXXFLAGS -c visualizer.cpp -o visualizer.o
-
-# Link all object files
+# Link everything together
 echo "Linking..."
-g++ visualizer.o bar_equalizer.o waveform.o multi_band_waveform.o multi_band_circle_waveform.o ascii_bar_equalizer.o spectrogram.o terrain_visualizer_3d.o grid_visualizer.o visualizer_factory.o -o visualizer $LDFLAGS $FFMPEG_LIBS
+$CXX $CXXFLAGS *.o $LDFLAGS $LIBS $FFMPEG_LIBS -o visualizer
 
 echo "Build complete. Run with: ./visualizer"

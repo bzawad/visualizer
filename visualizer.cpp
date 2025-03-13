@@ -21,6 +21,7 @@
 #include "multi_band_waveform.h"  // Add this include for MultiBandWaveform class
 #include "multi_band_circle_waveform.h"  // Add this include for MultiBandCircleWaveform class
 #include "grid_visualizer.h"
+#include "scroller_text.h"
 
 // FFmpeg libraries
 extern "C"
@@ -1160,4 +1161,35 @@ int main(int argc, char **argv)
     glfwTerminate();
 
     return 0;
+}
+
+Visualizer::Visualizer() {
+    screenWidth = 800;
+    screenHeight = 600;
+}
+
+Visualizer::~Visualizer() {
+}
+
+void Visualizer::initialize(int width, int height) {
+    screenWidth = width;
+    screenHeight = height;
+}
+
+void Visualizer::renderFrame(const std::vector<std::vector<float>>& audioSources,
+                           double* in,
+                           fftw_complex* out,
+                           fftw_plan& plan,
+                           float timeSeconds) {
+    // Default implementation for backward compatibility
+    renderFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, timeSeconds);
+}
+
+void Visualizer::renderLiveFrame(const std::vector<std::vector<float>>& audioSources,
+                               double* in,
+                               fftw_complex* out,
+                               fftw_plan& plan,
+                               size_t currentPosition) {
+    // Default implementation for backward compatibility
+    renderLiveFrame(audioSources.empty() ? std::vector<float>() : audioSources[0], in, out, plan, currentPosition);
 }

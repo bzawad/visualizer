@@ -7,6 +7,7 @@
 #include "multi_band_circle_waveform.h"
 #include "terrain_visualizer_3d.h"
 #include "grid_visualizer.h"
+#include "scroller_text.h"
 #include <algorithm>
 #include <cctype>
 
@@ -30,6 +31,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<TerrainVisualizer3D>();
     case GRID_VISUALIZER:
         return std::make_shared<GridVisualizer>();
+    case SCROLLER:
+        return std::make_shared<ScrollerText>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -75,6 +78,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(GRID_VISUALIZER);
     }
+    else if (lowerName == "scroller" || lowerName == "text" || lowerName == "scroll")
+    {
+        return createVisualizer(SCROLLER);
+    }
     else
     {
         // Default to bar equalizer
@@ -102,6 +109,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "3D Terrain Visualizer";
     case GRID_VISUALIZER:
         return "Grid Visualizer";
+    case SCROLLER:
+        return "Scroller Text";
     default:
         return "Unknown";
     }
