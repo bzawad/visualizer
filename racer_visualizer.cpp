@@ -85,9 +85,9 @@ void RacerVisualizer::updateRoad(float deltaTime)
     // Move road lines toward viewer
     for (float &z : roadLines)
     {
-        z += deltaTime * MOVE_SPEED;
-        if (z > 1.0f)
-            z = -1.0f;
+        z -= deltaTime * MOVE_SPEED;
+        if (z < -1.0f)
+            z = 1.0f;
     }
 }
 
