@@ -859,7 +859,7 @@ int main(int argc, char **argv)
         std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
                   << "Options:\n"
                   << "  --type <type>       Visualization type (default: bars)\n"
-                  << "                      Available types: bars, waveform, multiband, ascii,\n"
+                  << "                      Available types: bars, waveform, multiband, ascii, racer,\n"
                   << "                                      spectrogram, circle, terrain, cube, scroller\n"
                   << "  --record <file>     Record visualization to video file\n"
                   << "\n"
