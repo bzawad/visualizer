@@ -49,14 +49,18 @@ chmod +x build.sh
 ./visualizer [--type <type>] [--record output.mp4] <wav_files...>
 ```
 
-Visualization types:
-- `bars`: Classic frequency bars (default)
-- `waveform`: Grid-based waveform display
-- `multiband`: Multi-band waveform
+Visualization types (alphabetical):
 - `ascii`: ASCII frequency bars
+- `bars`: Classic frequency bars (default)
+- `circle`: Multi-band circle visualization
+- `cube`: 3D cube visualization
+- `grid`: Grid-based visualization
+- `multiband`: Multi-band waveform
+- `racer`: Synthwave racer visualization
+- `scroller`: Scrolling text visualization
 - `spectrogram`: Spectrogram display
-- `circle`: Multi-band circle
 - `terrain`: 3D terrain visualization
+- `waveform`: Grid-based waveform display
 
 For waveform visualization with multiple files, the display is arranged in a grid layout:
 - 1 file: 1x1 grid

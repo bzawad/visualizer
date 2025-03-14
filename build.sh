@@ -12,21 +12,21 @@ INCLUDES="-I/opt/homebrew/include"
 LIBS="-lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
 FFMPEG_LIBS="-lavcodec -lavformat -lavutil -lswscale"
 
-# Source files
+# Source files (alphabetized)
 SOURCES=(
-    "bar_equalizer.cpp"
-    "waveform.cpp"
-    "multi_band_waveform.cpp"
-    "multi_band_circle_waveform.cpp"
     "ascii_bar_equalizer.cpp"
+    "bar_equalizer.cpp"
+    "cube_visualizer.cpp"
+    "grid_visualizer.cpp"
+    "multi_band_circle_waveform.cpp"
+    "multi_band_waveform.cpp"
+    "racer_visualizer.cpp"
+    "scroller_text.cpp"
     "spectrogram.cpp"
     "terrain_visualizer_3d.cpp"
-    "grid_visualizer.cpp"
-    "visualizer_factory.cpp"
     "visualizer.cpp"
-    "scroller_text.cpp"
-    "cube_visualizer.cpp"
-    "racer_visualizer.cpp"
+    "visualizer_factory.cpp"
+    "waveform.cpp"
 )
 
 # Compile each source file
