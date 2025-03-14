@@ -238,8 +238,8 @@ void RacerVisualizer::renderSun()
     for (int i = 0; i <= SUN_SEGMENTS; i++)
     {
         float angle = M_PI * i / SUN_SEGMENTS;
-        float x = SUN_RADIUS * std::cos(angle);
-        float y = SUN_RADIUS * std::sin(angle);
+        float x = SUN_RADIUS * std::cos(angle) * 1.25f;
+        float y = SUN_RADIUS * std::sin(angle) * 1.25f;
         if (y >= 0.0f)
         {
             glVertex3f(x, y, 0.0f);
@@ -256,10 +256,10 @@ void RacerVisualizer::renderSun()
         float angle = M_PI * i / 11;
         if (std::sin(angle) >= 0.0f)
         {
-            float x1 = SUN_RADIUS * std::cos(angle);
-            float y1 = SUN_RADIUS * std::sin(angle);
-            float x2 = (SUN_RADIUS * 1.3f) * std::cos(angle);
-            float y2 = (SUN_RADIUS * 1.3f) * std::sin(angle);
+            float x1 = SUN_RADIUS * std::cos(angle) * 1.25f;
+            float y1 = SUN_RADIUS * std::sin(angle) * 1.25f;
+            float x2 = (SUN_RADIUS * 1.3f) * std::cos(angle) * 1.25f;
+            float y2 = (SUN_RADIUS * 1.3f) * std::sin(angle) * 1.25f;
 
             glVertex3f(x1, y1, 0.0f);
             glVertex3f(x2, y2, 0.0f);

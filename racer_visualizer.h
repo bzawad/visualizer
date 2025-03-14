@@ -37,7 +37,7 @@ private:
     static constexpr float GRID_COLOR[3] = {0.4f, 0.0f, 0.4f};     // Dark purple
 
     // Sun parameters
-    static constexpr float SUN_RADIUS = 0.5f;                       // Match road width at horizon
+    static constexpr float SUN_RADIUS = 0.675f;                       // Match road width at horizon
     static constexpr float SUN_Y_POS = 0.0f;                        // Position at horizon
     static constexpr float SUN_Z_POS = -5.0f;                       // Match far end of road
     static constexpr int SUN_SEGMENTS = 40;                         // More segments for smoother circle
