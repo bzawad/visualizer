@@ -14,6 +14,7 @@ A powerful music visualizer that supports multiple WAV files with various visual
   - Spectrogram (`spectrogram`): Time-frequency heat map
   - Multi-band Circle (`circle`): Circular frequency visualization
   - 3D Terrain (`terrain`): Three-dimensional terrain-like visualization
+  - 3D Maze (`maze`): Green vector-styled maze loop that syncs with music amplitude
 - Record visualizations to MP4 video files
 - Interactive visualization switching
 - Real-time audio mixing for multiple files
@@ -55,6 +56,7 @@ Visualization types (alphabetical):
 - `circle`: Multi-band circle visualization
 - `cube`: 3D cube visualization
 - `grid`: Grid-based visualization
+- `maze`: 3D green vector maze loop
 - `multiband`: Multi-band waveform
 - `racer`: Synthwave racer visualization
 - `scroller`: Scrolling text visualization
@@ -86,6 +88,9 @@ Examples:
 
 # 3D terrain visualization
 ./visualizer --type terrain music.wav
+
+# 3D green vector maze visualization
+./visualizer --type maze music.wav
 ```
 
 ## Creating Test Files

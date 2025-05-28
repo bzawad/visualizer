@@ -7,8 +7,9 @@ set -e
 CXX="clang++"
 CXXFLAGS="-std=c++17 -Wall -Wextra"
 
-# Include and library paths for macOS (using Homebrew paths)
+# Include and library paths for macOS (using Homebrew paths for ARM64)
 INCLUDES="-I/opt/homebrew/include"
+LDFLAGS="-L/opt/homebrew/lib"
 LIBS="-lglfw -lGLEW -framework OpenGL -lfftw3 -lsndfile -lportaudio"
 FFMPEG_LIBS="-lavcodec -lavformat -lavutil -lswscale"
 
@@ -18,6 +19,7 @@ SOURCES=(
     "bar_equalizer.cpp"
     "cube_visualizer.cpp"
     "grid_visualizer.cpp"
+    "maze_visualizer.cpp"
     "multi_band_circle_waveform.cpp"
     "multi_band_waveform.cpp"
     "racer_visualizer.cpp"
