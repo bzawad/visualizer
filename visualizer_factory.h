@@ -7,6 +7,7 @@
 #include <string>
 #include "racer_visualizer.h"
 #include "maze_visualizer.h"
+#include "hacker_terminal.h"
 
 enum VisualizerType
 {
@@ -21,7 +22,8 @@ enum VisualizerType
     SCROLLER,
     CUBE,
     RACER,
-    MAZE
+    MAZE,
+    HACKER
 };
 
 class VisualizerFactory

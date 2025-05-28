@@ -19,6 +19,7 @@ SOURCES=(
     "bar_equalizer.cpp"
     "cube_visualizer.cpp"
     "grid_visualizer.cpp"
+    "hacker_terminal.cpp"
     "maze_visualizer.cpp"
     "multi_band_circle_waveform.cpp"
     "multi_band_waveform.cpp"
