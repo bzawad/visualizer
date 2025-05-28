@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include "racer_visualizer.h"
+#include "maze_visualizer.h"
 
 enum VisualizerType
 {
@@ -19,7 +20,8 @@ enum VisualizerType
     GRID_VISUALIZER,
     SCROLLER,
     CUBE,
-    RACER
+    RACER,
+    MAZE
 };
 
 class VisualizerFactory
