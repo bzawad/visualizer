@@ -8,13 +8,19 @@ A powerful music visualizer that supports multiple WAV files with various visual
 - Support for mono and stereo WAV files
 - Multiple visualization types:
   - Bar Equalizer (`bars`): Classic frequency bars visualization
+  - Bouncing Balls (`balls`): Colorful balls that bounce to audio amplitude with physics simulation
   - Waveform (`waveform`): Grid-based waveform display with support for multiple files
   - Multi-band Waveform (`multiband`): Frequency-separated waveform visualization
   - ASCII Bar Equalizer (`ascii`): Text-based frequency visualization
   - Spectrogram (`spectrogram`): Time-frequency heat map
   - Multi-band Circle (`circle`): Circular frequency visualization
   - 3D Terrain (`terrain`): Three-dimensional terrain-like visualization
+  - 3D Cube (`cube`): Rotating 3D cube that responds to audio
   - 3D Maze (`maze`): Green vector-styled maze loop that syncs with music amplitude
+  - Hacker Terminal (`hacker`): Cyberpunk-style terminal interface with scrolling code
+  - Synthwave Racer (`racer`): Retro synthwave racing visualization
+  - Grid Visualizer (`grid`): Multi-source grid-based visualization
+  - Scroller Text (`scroller`): Scrolling text visualization
 - Record visualizations to MP4 video files
 - Interactive visualization switching
 - Real-time audio mixing for multiple files
@@ -52,10 +58,12 @@ chmod +x build.sh
 
 Visualization types (alphabetical):
 - `ascii`: ASCII frequency bars
+- `balls`: Bouncing balls with physics simulation
 - `bars`: Classic frequency bars (default)
 - `circle`: Multi-band circle visualization
 - `cube`: 3D cube visualization
 - `grid`: Grid-based visualization
+- `hacker`: Cyberpunk hacker terminal
 - `maze`: 3D green vector maze loop
 - `multiband`: Multi-band waveform
 - `racer`: Synthwave racer visualization
@@ -77,6 +85,9 @@ Examples:
 # Default visualization (frequency bars) with single file
 ./visualizer sample.wav
 
+# Bouncing balls visualization
+./visualizer --type balls music.wav
+
 # Waveform visualization with multiple files
 ./visualizer --type waveform song1.wav song2.wav song3.wav
 
@@ -91,6 +102,12 @@ Examples:
 
 # 3D green vector maze visualization
 ./visualizer --type maze music.wav
+
+# Cyberpunk hacker terminal
+./visualizer --type hacker music.wav
+
+# 3D cube visualization
+./visualizer --type cube music.wav
 ```
 
 ## Creating Test Files
