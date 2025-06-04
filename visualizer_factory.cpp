@@ -12,6 +12,7 @@
 #include "racer_visualizer.h"
 #include "maze_visualizer.h"
 #include "hacker_terminal.h"
+#include "balls_visualizer.h"
 #include <algorithm>
 #include <cctype>
 
@@ -45,6 +46,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<MazeVisualizer>();
     case HACKER:
         return std::make_shared<HackerTerminal>();
+    case BALLS:
+        return std::make_shared<BallsVisualizer>();
     default:
         // Default to bar equalizer
         return std::make_shared<BarEqualizer>();
@@ -110,6 +113,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(HACKER);
     }
+    else if (lowerName == "balls" || lowerName == "bouncing_balls" || lowerName == "bounce")
+    {
+        return createVisualizer(BALLS);
+    }
     else
     {
         // Default to bar equalizer
@@ -147,6 +154,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Maze Visualizer";
     case HACKER:
         return "Hacker Terminal";
+    case BALLS:
+        return "Bouncing Balls";
     default:
         return "Unknown";
     }

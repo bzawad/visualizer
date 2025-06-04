@@ -787,6 +787,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = HACKER;
             break;
         case HACKER:
+            currentVisualizerType = BALLS;
+            break;
+        case BALLS:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -865,7 +868,7 @@ int main(int argc, char **argv)
         std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
                   << "Options:\n"
                   << "  --type <type>       Visualization type (default: bars)\n"
-                  << "                      Available types: ascii, bars, circle, cube, grid, hacker, maze, multiband,\n"
+                  << "                      Available types: ascii, balls, bars, circle, cube, grid, hacker, maze, multiband,\n"
                   << "                                      racer, scroller, spectrogram, terrain, waveform\n"
                   << "  --record <file>     Record visualization to video file\n"
                   << "\n"
@@ -934,6 +937,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "hacker" || visualizerTypeName == "terminal" || visualizerTypeName == "cyber" || visualizerTypeName == "hack")
     {
         currentVisualizerType = HACKER;
+    }
+    else if (visualizerTypeName == "balls" || visualizerTypeName == "bouncing_balls" || visualizerTypeName == "bounce")
+    {
+        currentVisualizerType = BALLS;
     }
     else
     {

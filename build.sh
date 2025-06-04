@@ -16,6 +16,7 @@ FFMPEG_LIBS="-lavcodec -lavformat -lavutil -lswscale"
 # Source files (alphabetized)
 SOURCES=(
     "ascii_bar_equalizer.cpp"
+    "balls_visualizer.cpp"
     "bar_equalizer.cpp"
     "cube_visualizer.cpp"
     "grid_visualizer.cpp"
