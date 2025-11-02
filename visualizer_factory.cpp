@@ -1,5 +1,6 @@
 #include "visualizer_factory.h"
 #include "bar_equalizer.h"
+#include "mini_bar_equalizer.h"
 #include "waveform.h"
 #include "multi_band_waveform.h"
 #include "ascii_bar_equalizer.h"
@@ -10,6 +11,7 @@
 #include "scroller_text.h"
 #include "cube_visualizer.h"
 #include "racer_visualizer.h"
+#include "mini_racer_visualizer.h"
 #include "maze_visualizer.h"
 #include "hacker_terminal.h"
 #include "balls_visualizer.h"
@@ -22,6 +24,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
     {
     case BAR_EQUALIZER:
         return std::make_shared<BarEqualizer>();
+    case MINI_BAR_EQUALIZER:
+        return std::make_shared<MiniBarEqualizer>();
     case WAVEFORM:
         return std::make_shared<Waveform>();
     case MULTI_BAND_WAVEFORM:
@@ -42,6 +46,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<CubeVisualizer>();
     case RACER:
         return std::make_shared<RacerVisualizer>();
+    case MINI_RACER:
+        return std::make_shared<MiniRacerVisualizer>();
     case MAZE:
         return std::make_shared<MazeVisualizer>();
     case HACKER:
@@ -64,6 +70,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     if (lowerName == "bars" || lowerName == "equalizer" || lowerName == "bar_equalizer")
     {
         return createVisualizer(BAR_EQUALIZER);
+    }
+    else if (lowerName == "mini_bars" || lowerName == "minibars" || lowerName == "mini_bar_equalizer")
+    {
+        return createVisualizer(MINI_BAR_EQUALIZER);
     }
     else if (lowerName == "wave" || lowerName == "waveform")
     {
@@ -105,6 +115,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(RACER);
     }
+    else if (lowerName == "mini_racer" || lowerName == "miniracer")
+    {
+        return createVisualizer(MINI_RACER);
+    }
     else if (lowerName == "maze" || lowerName == "3d_maze" || lowerName == "vector_maze")
     {
         return createVisualizer(MAZE);
@@ -130,6 +144,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
     {
     case BAR_EQUALIZER:
         return "Bar Equalizer";
+    case MINI_BAR_EQUALIZER:
+        return "Mini Bar Equalizer";
     case WAVEFORM:
         return "Waveform";
     case MULTI_BAND_WAVEFORM:
@@ -150,6 +166,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "3D Cube Visualizer";
     case RACER:
         return "Synthwave Racer";
+    case MINI_RACER:
+        return "Mini Racer";
     case MAZE:
         return "Maze Visualizer";
     case HACKER:

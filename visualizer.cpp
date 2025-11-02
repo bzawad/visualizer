@@ -751,6 +751,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         switch (currentVisualizerType)
         {
         case BAR_EQUALIZER:
+            currentVisualizerType = MINI_BAR_EQUALIZER;
+            break;
+        case MINI_BAR_EQUALIZER:
             currentVisualizerType = WAVEFORM;
             break;
         case WAVEFORM:
@@ -781,6 +784,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = RACER;
             break;
         case RACER:
+            currentVisualizerType = MINI_RACER;
+            break;
+        case MINI_RACER:
             currentVisualizerType = MAZE;
             break;
         case MAZE:
@@ -890,7 +896,15 @@ int main(int argc, char **argv)
     currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
 
     // Get the visualizer type from the name
-    if (visualizerTypeName == "waveform")
+    if (visualizerTypeName == "bars" || visualizerTypeName == "equalizer" || visualizerTypeName == "bar_equalizer")
+    {
+        currentVisualizerType = BAR_EQUALIZER;
+    }
+    else if (visualizerTypeName == "mini_bars" || visualizerTypeName == "minibars" || visualizerTypeName == "mini_bar_equalizer")
+    {
+        currentVisualizerType = MINI_BAR_EQUALIZER;
+    }
+    else if (visualizerTypeName == "waveform")
     {
         currentVisualizerType = WAVEFORM;
     }
@@ -929,6 +943,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "racer" || visualizerTypeName == "synthwave" || visualizerTypeName == "race")
     {
         currentVisualizerType = RACER;
+    }
+    else if (visualizerTypeName == "mini_racer" || visualizerTypeName == "miniracer")
+    {
+        currentVisualizerType = MINI_RACER;
     }
     else if (visualizerTypeName == "maze" || visualizerTypeName == "3d_maze" || visualizerTypeName == "vector_maze")
     {
@@ -1023,7 +1041,10 @@ int main(int argc, char **argv)
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     }
 
-    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
+    // Use 128x43 for mini_racer and mini_bars, otherwise use default WIDTH x HEIGHT
+    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 128 : WIDTH;
+    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 43 : HEIGHT;
+    GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
     if (!window)
     {
         std::cerr << "Failed to create window\n";
@@ -1095,8 +1116,10 @@ int main(int argc, char **argv)
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // Initialize the visualizer
-    currentVisualizer->initialize(WIDTH, HEIGHT);
+    // Initialize the visualizer with correct dimensions
+    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 128 : WIDTH;
+    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 43 : HEIGHT;
+    currentVisualizer->initialize(visWidth, visHeight);
 
     // Initialize video encoder if recording
     if (recordVideo)

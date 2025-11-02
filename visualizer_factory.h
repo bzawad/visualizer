@@ -6,13 +6,16 @@
 #include <memory>
 #include <string>
 #include "racer_visualizer.h"
+#include "mini_racer_visualizer.h"
 #include "maze_visualizer.h"
 #include "hacker_terminal.h"
 #include "balls_visualizer.h"
+#include "mini_bar_equalizer.h"
 
 enum VisualizerType
 {
     BAR_EQUALIZER,
+    MINI_BAR_EQUALIZER,
     WAVEFORM,
     MULTI_BAND_WAVEFORM,
     ASCII_BAR_EQUALIZER,
@@ -23,6 +26,7 @@ enum VisualizerType
     SCROLLER,
     CUBE,
     RACER,
+    MINI_RACER,
     MAZE,
     HACKER,
     BALLS
