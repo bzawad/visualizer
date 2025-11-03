@@ -295,9 +295,6 @@ void MiniRacerVisualizer::renderFrame(const std::vector<float> &audioData,
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Furthest away first
-    renderSun();
-
     // Update and render
     updateRoad(1.0f / 60.0f);
     updateBuildings(1.0f / 60.0f);
@@ -325,8 +322,6 @@ void MiniRacerVisualizer::renderLiveFrame(const std::vector<float> &audioData,
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    renderSun();
 
     updateRoad(1.0f / 60.0f);
     updateBuildings(1.0f / 60.0f);
