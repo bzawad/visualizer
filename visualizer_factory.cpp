@@ -5,6 +5,7 @@
 #include "multi_band_waveform.h"
 #include "ascii_bar_equalizer.h"
 #include "spectrogram.h"
+#include "mini_spectrogram.h"
 #include "multi_band_circle_waveform.h"
 #include "terrain_visualizer_3d.h"
 #include "grid_visualizer.h"
@@ -34,6 +35,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<AsciiBarEqualizer>();
     case SPECTROGRAM:
         return std::make_shared<Spectrogram>();
+    case MINI_SPECTROGRAM:
+        return std::make_shared<MiniSpectrogram>();
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return std::make_shared<MultiBandCircleWaveform>();
     case TERRAIN_VISUALIZER_3D:
@@ -90,6 +93,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     else if (lowerName == "spectrogram" || lowerName == "spectrum")
     {
         return createVisualizer(SPECTROGRAM);
+    }
+    else if (lowerName == "mini_spectrogram" || lowerName == "minispectrogram" || lowerName == "mini_spectrum")
+    {
+        return createVisualizer(MINI_SPECTROGRAM);
     }
     else if (lowerName == "circle" || lowerName == "circles" || lowerName == "multi_band_circle")
     {
@@ -154,6 +161,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "ASCII Bar Equalizer";
     case SPECTROGRAM:
         return "Spectrogram";
+    case MINI_SPECTROGRAM:
+        return "Mini Spectrogram";
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return "Multi-Band Circle Waveform";
     case TERRAIN_VISUALIZER_3D:

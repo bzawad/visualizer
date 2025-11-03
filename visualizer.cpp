@@ -766,6 +766,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = SPECTROGRAM;
             break;
         case SPECTROGRAM:
+            currentVisualizerType = MINI_SPECTROGRAM;
+            break;
+        case MINI_SPECTROGRAM:
             currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
             break;
         case MULTI_BAND_CIRCLE_WAVEFORM:
@@ -920,6 +923,10 @@ int main(int argc, char **argv)
     {
         currentVisualizerType = SPECTROGRAM;
     }
+    else if (visualizerTypeName == "mini_spectrogram" || visualizerTypeName == "minispectrogram" || visualizerTypeName == "mini_spectrum")
+    {
+        currentVisualizerType = MINI_SPECTROGRAM;
+    }
     else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
     {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
@@ -1041,9 +1048,9 @@ int main(int argc, char **argv)
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     }
 
-    // Use 128x43 for mini_racer and mini_bars, otherwise use default WIDTH x HEIGHT
-    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 128 : WIDTH;
-    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 43 : HEIGHT;
+    // Use 128x43 for mini visualizers, otherwise use default WIDTH x HEIGHT
+    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
+    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
     GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
     if (!window)
     {
@@ -1117,8 +1124,8 @@ int main(int argc, char **argv)
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     // Initialize the visualizer with correct dimensions
-    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 128 : WIDTH;
-    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER) ? 43 : HEIGHT;
+    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
+    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
     currentVisualizer->initialize(visWidth, visHeight);
 
     // Initialize video encoder if recording

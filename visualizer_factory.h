@@ -11,6 +11,7 @@
 #include "hacker_terminal.h"
 #include "balls_visualizer.h"
 #include "mini_bar_equalizer.h"
+#include "mini_spectrogram.h"
 
 enum VisualizerType
 {
@@ -20,6 +21,7 @@ enum VisualizerType
     MULTI_BAND_WAVEFORM,
     ASCII_BAR_EQUALIZER,
     SPECTROGRAM,
+    MINI_SPECTROGRAM,
     MULTI_BAND_CIRCLE_WAVEFORM,
     TERRAIN_VISUALIZER_3D,
     GRID_VISUALIZER,

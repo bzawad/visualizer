@@ -24,6 +24,7 @@ SOURCES=(
     "hacker_terminal.cpp"
     "maze_visualizer.cpp"
     "mini_racer_visualizer.cpp"
+    "mini_spectrogram.cpp"
     "multi_band_circle_waveform.cpp"
     "multi_band_waveform.cpp"
     "racer_visualizer.cpp"
