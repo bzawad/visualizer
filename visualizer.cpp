@@ -751,6 +751,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
         switch (currentVisualizerType)
         {
         case BAR_EQUALIZER:
+            currentVisualizerType = MINI_BAR_EQUALIZER;
+            break;
+        case MINI_BAR_EQUALIZER:
             currentVisualizerType = WAVEFORM;
             break;
         case WAVEFORM:
@@ -763,6 +766,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = SPECTROGRAM;
             break;
         case SPECTROGRAM:
+            currentVisualizerType = MINI_SPECTROGRAM;
+            break;
+        case MINI_SPECTROGRAM:
             currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
             break;
         case MULTI_BAND_CIRCLE_WAVEFORM:
@@ -781,12 +787,18 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = RACER;
             break;
         case RACER:
+            currentVisualizerType = MINI_RACER;
+            break;
+        case MINI_RACER:
             currentVisualizerType = MAZE;
             break;
         case MAZE:
             currentVisualizerType = HACKER;
             break;
         case HACKER:
+            currentVisualizerType = BALLS;
+            break;
+        case BALLS:
             currentVisualizerType = BAR_EQUALIZER;
             break;
         }
@@ -865,7 +877,7 @@ int main(int argc, char **argv)
         std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
                   << "Options:\n"
                   << "  --type <type>       Visualization type (default: bars)\n"
-                  << "                      Available types: ascii, bars, circle, cube, grid, hacker, maze, multiband,\n"
+                  << "                      Available types: ascii, balls, bars, circle, cube, grid, hacker, maze, multiband,\n"
                   << "                                      racer, scroller, spectrogram, terrain, waveform\n"
                   << "  --record <file>     Record visualization to video file\n"
                   << "\n"
@@ -887,7 +899,15 @@ int main(int argc, char **argv)
     currentVisualizer = VisualizerFactory::createVisualizer(visualizerTypeName);
 
     // Get the visualizer type from the name
-    if (visualizerTypeName == "waveform")
+    if (visualizerTypeName == "bars" || visualizerTypeName == "equalizer" || visualizerTypeName == "bar_equalizer")
+    {
+        currentVisualizerType = BAR_EQUALIZER;
+    }
+    else if (visualizerTypeName == "mini_bars" || visualizerTypeName == "minibars" || visualizerTypeName == "mini_bar_equalizer")
+    {
+        currentVisualizerType = MINI_BAR_EQUALIZER;
+    }
+    else if (visualizerTypeName == "waveform")
     {
         currentVisualizerType = WAVEFORM;
     }
@@ -902,6 +922,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "spectrogram" || visualizerTypeName == "spectrum")
     {
         currentVisualizerType = SPECTROGRAM;
+    }
+    else if (visualizerTypeName == "mini_spectrogram" || visualizerTypeName == "minispectrogram" || visualizerTypeName == "mini_spectrum")
+    {
+        currentVisualizerType = MINI_SPECTROGRAM;
     }
     else if (visualizerTypeName == "circle" || visualizerTypeName == "circles" || visualizerTypeName == "multi_band_circle")
     {
@@ -927,6 +951,10 @@ int main(int argc, char **argv)
     {
         currentVisualizerType = RACER;
     }
+    else if (visualizerTypeName == "mini_racer" || visualizerTypeName == "miniracer")
+    {
+        currentVisualizerType = MINI_RACER;
+    }
     else if (visualizerTypeName == "maze" || visualizerTypeName == "3d_maze" || visualizerTypeName == "vector_maze")
     {
         currentVisualizerType = MAZE;
@@ -934,6 +962,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "hacker" || visualizerTypeName == "terminal" || visualizerTypeName == "cyber" || visualizerTypeName == "hack")
     {
         currentVisualizerType = HACKER;
+    }
+    else if (visualizerTypeName == "balls" || visualizerTypeName == "bouncing_balls" || visualizerTypeName == "bounce")
+    {
+        currentVisualizerType = BALLS;
     }
     else
     {
@@ -1016,7 +1048,10 @@ int main(int argc, char **argv)
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     }
 
-    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
+    // Use 128x43 for mini visualizers, otherwise use default WIDTH x HEIGHT
+    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
+    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
+    GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
     if (!window)
     {
         std::cerr << "Failed to create window\n";
@@ -1088,8 +1123,10 @@ int main(int argc, char **argv)
     // Set clear color
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // Initialize the visualizer
-    currentVisualizer->initialize(WIDTH, HEIGHT);
+    // Initialize the visualizer with correct dimensions
+    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
+    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
+    currentVisualizer->initialize(visWidth, visHeight);
 
     // Initialize video encoder if recording
     if (recordVideo)
