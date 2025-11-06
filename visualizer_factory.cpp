@@ -6,6 +6,8 @@
 #include "ascii_bar_equalizer.h"
 #include "spectrogram.h"
 #include "mini_spectrogram.h"
+#include "mini_cube_visualizer.h"
+#include "mini_circle_visualizer.h"
 #include "multi_band_circle_waveform.h"
 #include "terrain_visualizer_3d.h"
 #include "grid_visualizer.h"
@@ -39,6 +41,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<MiniSpectrogram>();
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return std::make_shared<MultiBandCircleWaveform>();
+    case MINI_CIRCLE:
+        return std::make_shared<MiniCircleVisualizer>();
     case TERRAIN_VISUALIZER_3D:
         return std::make_shared<TerrainVisualizer3D>();
     case GRID_VISUALIZER:
@@ -47,6 +51,8 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(VisualizerType t
         return std::make_shared<ScrollerText>();
     case CUBE:
         return std::make_shared<CubeVisualizer>();
+    case MINI_CUBE:
+        return std::make_shared<MiniCubeVisualizer>();
     case RACER:
         return std::make_shared<RacerVisualizer>();
     case MINI_RACER:
@@ -102,6 +108,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     {
         return createVisualizer(MULTI_BAND_CIRCLE_WAVEFORM);
     }
+    else if (lowerName == "mini_circle" || lowerName == "minicircle" || lowerName == "mini_circles")
+    {
+        return createVisualizer(MINI_CIRCLE);
+    }
     else if (lowerName == "terrain" || lowerName == "3d" || lowerName == "terrain3d" || lowerName == "3d_terrain")
     {
         return createVisualizer(TERRAIN_VISUALIZER_3D);
@@ -117,6 +127,10 @@ std::shared_ptr<Visualizer> VisualizerFactory::createVisualizer(const std::strin
     else if (lowerName == "cube" || lowerName == "3d_cube")
     {
         return createVisualizer(CUBE);
+    }
+    else if (lowerName == "mini_cube" || lowerName == "minicube" || lowerName == "mini_3d_cube")
+    {
+        return createVisualizer(MINI_CUBE);
     }
     else if (lowerName == "racer" || lowerName == "synthwave" || lowerName == "race")
     {
@@ -165,6 +179,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Mini Spectrogram";
     case MULTI_BAND_CIRCLE_WAVEFORM:
         return "Multi-Band Circle Waveform";
+    case MINI_CIRCLE:
+        return "Mini Circle Visualizer";
     case TERRAIN_VISUALIZER_3D:
         return "3D Terrain Visualizer";
     case GRID_VISUALIZER:
@@ -173,6 +189,8 @@ std::string VisualizerFactory::getVisualizerName(VisualizerType type)
         return "Scroller Text";
     case CUBE:
         return "3D Cube Visualizer";
+    case MINI_CUBE:
+        return "Mini Cube Visualizer";
     case RACER:
         return "Synthwave Racer";
     case MINI_RACER:

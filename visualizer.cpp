@@ -772,6 +772,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
             break;
         case MULTI_BAND_CIRCLE_WAVEFORM:
+            currentVisualizerType = MINI_CIRCLE;
+            break;
+        case MINI_CIRCLE:
             currentVisualizerType = TERRAIN_VISUALIZER_3D;
             break;
         case TERRAIN_VISUALIZER_3D:
@@ -784,6 +787,9 @@ void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods
             currentVisualizerType = CUBE;
             break;
         case CUBE:
+            currentVisualizerType = MINI_CUBE;
+            break;
+        case MINI_CUBE:
             currentVisualizerType = RACER;
             break;
         case RACER:
@@ -877,7 +883,7 @@ int main(int argc, char **argv)
         std::cerr << "Usage: " << argv[0] << " [options] <wav_files...>\n"
                   << "Options:\n"
                   << "  --type <type>       Visualization type (default: bars)\n"
-                  << "                      Available types: ascii, balls, bars, circle, cube, grid, hacker, maze, multiband,\n"
+                  << "                      Available types: ascii, balls, bars, circle, cube, grid, hacker, maze, mini_cube, multiband,\n"
                   << "                                      racer, scroller, spectrogram, terrain, waveform\n"
                   << "  --record <file>     Record visualization to video file\n"
                   << "\n"
@@ -931,6 +937,10 @@ int main(int argc, char **argv)
     {
         currentVisualizerType = MULTI_BAND_CIRCLE_WAVEFORM;
     }
+    else if (visualizerTypeName == "mini_circle" || visualizerTypeName == "minicircle" || visualizerTypeName == "mini_circles")
+    {
+        currentVisualizerType = MINI_CIRCLE;
+    }
     else if (visualizerTypeName == "terrain" || visualizerTypeName == "3d" || visualizerTypeName == "terrain3d" || visualizerTypeName == "3d_terrain")
     {
         currentVisualizerType = TERRAIN_VISUALIZER_3D;
@@ -946,6 +956,10 @@ int main(int argc, char **argv)
     else if (visualizerTypeName == "cube" || visualizerTypeName == "3d_cube")
     {
         currentVisualizerType = CUBE;
+    }
+    else if (visualizerTypeName == "mini_cube" || visualizerTypeName == "minicube" || visualizerTypeName == "mini_3d_cube")
+    {
+        currentVisualizerType = MINI_CUBE;
     }
     else if (visualizerTypeName == "racer" || visualizerTypeName == "synthwave" || visualizerTypeName == "race")
     {
@@ -1049,8 +1063,8 @@ int main(int argc, char **argv)
     }
 
     // Use 128x43 for mini visualizers, otherwise use default WIDTH x HEIGHT
-    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
-    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
+    int windowWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM || currentVisualizerType == MINI_CIRCLE || currentVisualizerType == MINI_CUBE) ? 128 : WIDTH;
+    int windowHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM || currentVisualizerType == MINI_CIRCLE || currentVisualizerType == MINI_CUBE) ? 43 : HEIGHT;
     GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, recordVideo ? "Music Visualizer (Recording)" : "Music Visualizer", NULL, NULL);
     if (!window)
     {
@@ -1124,8 +1138,8 @@ int main(int argc, char **argv)
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
     // Initialize the visualizer with correct dimensions
-    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 128 : WIDTH;
-    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM) ? 43 : HEIGHT;
+    int visWidth = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM || currentVisualizerType == MINI_CIRCLE || currentVisualizerType == MINI_CUBE) ? 128 : WIDTH;
+    int visHeight = (currentVisualizerType == MINI_RACER || currentVisualizerType == MINI_BAR_EQUALIZER || currentVisualizerType == MINI_SPECTROGRAM || currentVisualizerType == MINI_CIRCLE || currentVisualizerType == MINI_CUBE) ? 43 : HEIGHT;
     currentVisualizer->initialize(visWidth, visHeight);
 
     // Initialize video encoder if recording

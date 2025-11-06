@@ -20,6 +20,8 @@ SOURCES=(
     "bar_equalizer.cpp"
     "mini_bar_equalizer.cpp"
     "cube_visualizer.cpp"
+    "mini_circle_visualizer.cpp"
+    "mini_cube_visualizer.cpp"
     "grid_visualizer.cpp"
     "hacker_terminal.cpp"
     "maze_visualizer.cpp"

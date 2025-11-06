@@ -12,6 +12,8 @@
 #include "balls_visualizer.h"
 #include "mini_bar_equalizer.h"
 #include "mini_spectrogram.h"
+#include "mini_cube_visualizer.h"
+#include "mini_circle_visualizer.h"
 
 enum VisualizerType
 {
@@ -23,10 +25,12 @@ enum VisualizerType
     SPECTROGRAM,
     MINI_SPECTROGRAM,
     MULTI_BAND_CIRCLE_WAVEFORM,
+    MINI_CIRCLE,
     TERRAIN_VISUALIZER_3D,
     GRID_VISUALIZER,
     SCROLLER,
     CUBE,
+    MINI_CUBE,
     RACER,
     MINI_RACER,
     MAZE,
