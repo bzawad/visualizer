@@ -1,6 +1,6 @@
 # Music Visualizer
 
-A powerful music visualizer that supports multiple WAV files with various visualization types. Perfect for analyzing and comparing audio files visually.
+A music visualizer that supports multiple WAV files with various visualization types. Perfect for analyzing and comparing audio files visually.
 
 ## Features
 
